@@ -28,7 +28,7 @@
         <template #default="{row}">{{reasonLabel(row.failure_reason)}}</template>
       </el-table-column>
       <el-table-column label="时间" width="170">
-        <template #default="{row}">{{formatTime(row.created_at)}}</template>
+        <template #default="{row}">{{formatTimeWrap(row.created_at)}}</template>
       </el-table-column>
     </el-table>
     <div class="table-footer">
@@ -41,10 +41,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getRecognitionEvents } from '../api/index.js'
+import { formatTime, reasonLabel } from '../utils/index.js'
 const loading=ref(false),events=ref([]),page=ref(1),perPage=ref(20),total=ref(0)
-const reasonLabels={cooldown_not_reached:'冷却中',already_checked_out:'已签退',confidence_too_low:'置信度不足',member_inactive:'成员已禁用',insufficient_face_samples:'人脸样本不足',liveness_failed:'活体检测失败'}
-function reasonLabel(r){return reasonLabels[r]||r||'-'}
-function formatTime(iso){if(!iso)return'';const d=new Date(iso),pad=n=>String(n).padStart(2,'0');return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`}
+function formatTimeWrap(iso){return formatTime(iso,true)}
 async function fetchData(){loading.value=true;try{const r=await getRecognitionEvents({page:page.value,per_page:perPage.value});events.value=r.data.list;total.value=r.data.total}catch{}finally{loading.value=false}}
 onMounted(fetchData)
 </script>

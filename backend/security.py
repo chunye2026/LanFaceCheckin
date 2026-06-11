@@ -8,8 +8,6 @@
 import os
 import jwt
 import datetime
-import secrets
-import bcrypt
 from functools import wraps
 from flask import request, jsonify, g
 from logger import security_logger
@@ -56,15 +54,6 @@ def admin_required(f):
             return jsonify({'code': 401, 'message': '无效令牌'}), 401
         return f(*args, **kwargs)
     return decorated
-
-def generate_random_password(length=12):
-    return secrets.token_urlsafe(length)
-
-def hash_password(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def verify_password(password, hashed):
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def validate_image_upload(file_storage, max_size_mb=10):
     if not file_storage or not file_storage.filename:

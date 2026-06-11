@@ -220,7 +220,6 @@ def camera_stop():
 @admin_bp.route('/api/admin/camera/status', methods=['GET'])
 def camera_status():
     from camera_service import get_status
-    from face_service import is_model_available
     s = get_status()
     s['model_available'] = is_model_available()
     return jsonify({'code': 200, 'data': s})
@@ -325,8 +324,6 @@ def manual_checkin():
 def dashboard_status():
     """公开 Dashboard 聚合接口"""
     from camera_service import get_status as camera_get_status
-    from face_service import is_model_available
-    from config import FACE_MATCH_THRESHOLD, MIN_FACE_SAMPLES
 
     cam = camera_get_status()
     cam['model_available'] = is_model_available()
@@ -434,7 +431,6 @@ def list_operation_logs():
 
 @admin_bp.route('/api/admin/system/status', methods=['GET'])
 def system_status():
-    from face_service import is_model_available
     member_count = Member.query.filter_by(active=True).count()
     today = datetime.now().strftime('%Y-%m-%d')
     today_in = CheckinRecord.query.filter(CheckinRecord.check_time >= f'{today} 00:00:00', CheckinRecord.check_type == 'in').count()

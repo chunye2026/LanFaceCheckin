@@ -45,10 +45,6 @@ export function changePassword(oldPassword, newPassword) {
   return api.post('/admin/change-password', { old_password: oldPassword, new_password: newPassword })
 }
 
-export function getAdminInfo() {
-  return api.get('/admin/info')
-}
-
 /* ========== 成员管理 ========== */
 
 export function getMembers(params = {}) {
@@ -99,10 +95,6 @@ export function cameraStatus() {
   return api.get('/admin/camera/status')
 }
 
-export function cameraSnapshot() {
-  return api.get('/admin/camera/snapshot', { responseType: 'blob' })
-}
-
 /* ========== 识别事件 ========== */
 
 export function getRecognitionEvents(params = {}) {
@@ -121,22 +113,14 @@ export function manualCheckin(memberId, checkType) {
 
 /* ========== 系统 ========== */
 
-export function getSystemStatus() {
-  return api.get('/admin/system/status')
-}
-
 export function getOperationLogs(params = {}) {
   return api.get('/admin/operation-logs', { params })
 }
 
-/* ========== 打卡记录（公开） ========== */
+/* ========== 公开接口 ========== */
 
 export function getDashboardStatus() {
   return api.get('/dashboard/status')
-}
-
-export function getPublicRecords(params = {}) {
-  return api.get('/checkin/records', { params })
 }
 
 export default api

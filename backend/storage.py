@@ -19,10 +19,3 @@ def delete_file(filename):
         path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
             os.remove(path)
-
-def save_snapshot(img_array):
-    import uuid, cv2
-    filename = f"snapshot_{uuid.uuid4().hex}.jpg"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    cv2.imwrite(filepath, img_array)
-    return filename

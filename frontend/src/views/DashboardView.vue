@@ -127,6 +127,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getDashboardStatus } from '../api/index.js'
+import { formatTime, reasonLabel } from '../utils/index.js'
 
 const stats = ref({})
 const camera = ref({})
@@ -138,13 +139,6 @@ const currentTime = ref('')
 const streamUrl = '/api/admin/camera/stream'
 let timers = []
 
-const reasonLabels = {
-  cooldown_not_reached:'冷却中',already_checked_out:'已签退',confidence_too_low:'低置信',
-  member_inactive:'已禁用',insufficient_face_samples:'样本不足',liveness_failed:'活体失败',
-}
-
-function reasonLabel(r) { return reasonLabels[r] || r }
-function formatTime(iso) { if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}` }
 function updateClock() { currentTime.value = new Date().toLocaleString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) }
 
 function statClass(key) {

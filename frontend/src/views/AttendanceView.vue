@@ -28,7 +28,7 @@
       <el-table-column label="类型" width="80">
         <template #default="{row}"><el-tag :type="row.check_type==='in'?'success':'warning'" size="small" effect="dark">{{row.check_type==='in'?'签到':'签退'}}</el-tag></template>
       </el-table-column>
-      <el-table-column label="时间" width="170"><template #default="{row}">{{formatTime(row.check_time)}}</template></el-table-column>
+      <el-table-column label="时间" width="170"><template #default="{row}">{{formatTimeLocal(row.check_time)}}</template></el-table-column>
       <el-table-column prop="confidence" label="置信度" width="90"><template #default="{row}">{{(row.confidence*100).toFixed(1)}}%</template></el-table-column>
       <el-table-column label="来源" width="80"><template #default="{row}"><el-tag :type="row.source==='auto'?'':'info'" size="small">{{row.source==='auto'?'自动':'人工'}}</el-tag></template></el-table-column>
       <el-table-column prop="recognition_event_id" label="识别事件ID" width="110" align="center"/>
@@ -63,10 +63,11 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCheckinRecords, manualCheckin, getMembers } from '../api/index.js'
+import { formatTime } from '../utils/index.js'
 const loading=ref(false),records=ref([]),page=ref(1),perPage=ref(30),total=ref(0)
 const filters=reactive({dateRange:null,check_type:'',source:''})
 const showManualDialog=ref(false),manualForm=reactive({member_id:null,check_type:'in'}),manualLoading=ref(false),members=ref([])
-function formatTime(iso){if(!iso)return'';const d=new Date(iso),pad=n=>String(n).padStart(2,'0');return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`}
+function formatTimeLocal(iso){return formatTime(iso,true)}
 async function fetchData(){
   loading.value=true
   try{

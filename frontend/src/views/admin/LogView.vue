@@ -49,7 +49,7 @@
       <el-table-column prop="ip_address" label="IP地址" width="140" />
       <el-table-column label="操作时间" width="180">
         <template #default="{ row }">
-          <span class="time-text">{{ formatTime(row.created_at) }}</span>
+          <span class="time-text">{{ formatTimeLog(row.created_at) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -65,6 +65,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { getOperationLogs } from '../../api/index.js'
+import { formatTime } from '../../utils/index.js'
 
 const loading = ref(false)
 const logs = ref([])
@@ -131,12 +132,7 @@ function resetFilters() {
   fetchLogs()
 }
 
-function formatTime(isoStr) {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
+function formatTimeLog(isoStr) { return formatTime(isoStr, true) }
 
 onMounted(() => {
   actionTypes.value = ['LOGIN', 'LOGIN_FAILED', 'CREATE_MEMBER', 'UPDATE_MEMBER', 'DELETE_MEMBER', 'UPLOAD_FACE', 'DELETE_FACE', 'CHECK_IN', 'CHECK_OUT', 'MANUAL_CHECKIN']
