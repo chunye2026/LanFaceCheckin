@@ -109,14 +109,16 @@
       <h4>上传新样本</h4>
       <el-alert v-if="existingSamples.length >= maxSamples" title="已达到最大样本数" type="info" :closable="false" style="margin-bottom:12px" />
       <div v-else class="upload-area">
-        <el-upload class="face-uploader" :auto-upload="false"
-          :show-file-list="false" accept="image/*" :on-change="handleFaceSelect">
+        <el-upload class="face-uploader" drag multiple
+          :auto-upload="false" :show-file-list="false"
+          accept="image/*" :on-change="handleFaceSelect"
+          :before-upload="() => false">
           <div class="upload-box">
             <img v-if="facePreviewUrl" :src="facePreviewUrl" class="preview-img" />
             <div v-else class="upload-placeholder">
               <el-icon :size="40" color="#c0c4cc"><UploadFilled /></el-icon>
-              <p>点击选择照片</p>
-              <span>正面清晰单人照</span>
+              <p>拖拽或点击选择照片</p>
+              <span>支持从微信窗口拖入</span>
             </div>
           </div>
         </el-upload>
@@ -296,9 +298,17 @@ onMounted(fetchMembers)
 .sample-thumb { width: 100%; height: 100%; object-fit: cover; }
 .sample-del { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.5); padding: 2px; }
 .upload-area { text-align: center; }
-.upload-box { width: 180px; height: 180px; margin: 0 auto; border: 2px dashed #dcdfe6; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
-.upload-box:hover { border-color: #409eff; }
-.preview-img { width: 100%; height: 100%; object-fit: contain; }
+.face-uploader { display: inline-block; width: 100%; }
+.face-uploader :deep(.el-upload-dragger) {
+  width: 100% !important;
+  height: 200px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.upload-box { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.preview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .upload-placeholder { text-align: center; color: #999; }
 .upload-placeholder p { margin: 8px 0 4px; font-size: 14px; }
 .upload-placeholder span { font-size: 12px; color: #c0c4cc; }
