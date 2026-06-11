@@ -1,5 +1,14 @@
 <template>
   <div class="dashboard">
+    <!-- 顶部栏 -->
+    <div class="dash-topbar">
+      <span class="dash-title"><el-icon :size="22"><Camera /></el-icon> 无感考勤监控台</span>
+      <div class="dash-top-right">
+        <span class="dash-time">{{ currentTime }}</span>
+        <el-button size="small" @click="$router.push('/admin/login')">后台管理</el-button>
+      </div>
+    </div>
+
     <!-- 顶部统计 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
@@ -40,17 +49,30 @@
           </el-tag>
         </div>
       </template>
-      <el-descriptions :column="4" border size="small">
-        <el-descriptions-item label="帧率">{{ cameraStatus.fps || 0 }} FPS</el-descriptions-item>
-        <el-descriptions-item label="检测人脸">{{ cameraStatus.detected_faces || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="模型">
-          <el-tag :type="cameraStatus.model_available ? 'success' : 'danger'" size="small">{{ cameraStatus.model_available ? '可用' : '不可用' }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="最后帧">{{ cameraStatus.last_frame_time ? formatTime(cameraStatus.last_frame_time) : '-' }}</el-descriptions-item>
-      </el-descriptions>
-      <div v-if="cameraStatus.last_error" style="margin-top:12px">
-        <el-alert :title="cameraStatus.last_error" type="error" :closable="false" show-icon />
-      </div>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="帧率">{{ cameraStatus.fps || 0 }} FPS</el-descriptions-item>
+            <el-descriptions-item label="检测人脸">{{ cameraStatus.detected_faces || 0 }}</el-descriptions-item>
+            <el-descriptions-item label="模型">
+              <el-tag :type="cameraStatus.model_available ? 'success' : 'danger'" size="small">{{ cameraStatus.model_available ? '可用' : '不可用' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="最后帧">{{ cameraStatus.last_frame_time ? formatTime(cameraStatus.last_frame_time) : '-' }}</el-descriptions-item>
+          </el-descriptions>
+          <div v-if="cameraStatus.last_error" style="margin-top:12px">
+            <el-alert :title="cameraStatus.last_error" type="error" :closable="false" show-icon />
+          </div>
+        </el-col>
+        <el-col :span="12">
+          <div class="mini-stream">
+            <img v-if="cameraStatus.running" :src="streamUrl" class="mini-stream-img" alt="Live" />
+            <div v-else class="mini-stream-placeholder">
+              <el-icon :size="40" color="#c0c4cc"><VideoCamera /></el-icon>
+              <span>摄像头未启动</span>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
     </el-card>
 
     <el-row :gutter="16">
@@ -113,7 +135,14 @@ const systemStatus = ref({})
 const cameraStatus = ref({})
 const recentEvents = ref([])
 const recentRecords = ref([])
+const currentTime = ref('')
+const streamUrl = '/api/admin/camera/stream'
 let timer = null
+
+function updateClock() {
+  const d = new Date()
+  currentTime.value = d.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -134,13 +163,31 @@ async function refresh() {
   } catch(e) { /* ignore */ }
 }
 
-onMounted(() => { refresh(); timer = setInterval(refresh, 3000) })
+onMounted(() => { updateClock(); refresh(); timer = setInterval(refresh, 3000); setInterval(updateClock, 1000) })
 onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>
 
 <style scoped>
-.dashboard { padding: 4px; }
-.stats-row { margin-bottom: 16px; }
+.dashboard {
+  min-height: 100vh;
+  background: #f0f2f5;
+  padding: 0 0 16px 0;
+  box-sizing: border-box;
+}
+.dash-topbar {
+  background: linear-gradient(135deg, #409eff, #337ecc);
+  color: #fff;
+  padding: 0 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.dash-title { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.dash-top-right { display: flex; align-items: center; gap: 16px; }
+.dash-time { font-family: monospace; font-size: 15px; opacity: 0.9; }
+.stats-row { margin-bottom: 16px; max-width: 1400px; margin-left: auto; margin-right: auto; padding: 0 16px; }
 .stat-card { text-align: center; }
 .stat-num { font-size: 28px; font-weight: 700; color: #303133; }
 .stat-num small { font-size: 14px; font-weight: 400; color: #909399; }
@@ -148,7 +195,19 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .stat-num.orange { color: #e6a23c; }
 .stat-num.red { color: #f56c6c; }
 .stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
-.section-card { margin-bottom: 16px; }
+.section-card { margin-bottom: 16px; max-width: 1400px; margin-left: auto; margin-right: auto; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .tl-name { font-weight: 500; }
+.mini-stream {
+  background: #000;
+  border-radius: 6px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.mini-stream-img { width: 100%; height: 100%; object-fit: contain; }
+.mini-stream-placeholder { text-align: center; color: #909399; }
+.mini-stream-placeholder span { display: block; margin-top: 8px; font-size: 13px; }
 </style>

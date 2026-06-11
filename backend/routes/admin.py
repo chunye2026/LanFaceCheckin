@@ -237,6 +237,28 @@ def camera_snapshot():
     return Response(buf.tobytes(), mimetype='image/jpeg')
 
 
+@admin_bp.route('/api/admin/camera/stream', methods=['GET'])
+def camera_stream():
+    """MJPEG 实时视频流"""
+    from camera_service import get_frame
+    import cv2
+
+    def generate():
+        while True:
+            frame = get_frame()
+            if frame is None:
+                # 返回占位图
+                placeholder = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + placeholder.tobytes() + b'\r\n')
+            else:
+                _, buf = cv2.imencode('.jpg', frame)
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+            import time
+            time.sleep(0.1)
+
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
 # ========== 识别事件 ==========
 
 @admin_bp.route('/api/admin/recognition-events', methods=['GET'])
