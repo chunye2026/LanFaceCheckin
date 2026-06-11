@@ -9,8 +9,8 @@ from models import db, Admin, Member, FaceSample, FaceEmbedding, CameraDevice, R
 from security import admin_required, validate_image_upload
 from face_service import extract_embedding, embedding_to_json, is_model_available, verify_face_image
 from storage import save_upload, delete_file
-from logger import app_logger, security_logger
-from config import MIN_FACE_SAMPLES, MAX_FACE_SAMPLES, UPLOAD_FOLDER
+from logger import security_logger
+from config import MIN_FACE_SAMPLES, MAX_FACE_SAMPLES, FACE_MATCH_THRESHOLD
 
 admin_bp = Blueprint('admin', __name__)
 
