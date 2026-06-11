@@ -366,19 +366,20 @@ def dashboard_status():
 
 
 def _aggregate_events(events, window_seconds=10):
-    """合并同一成员在时间窗口内的重复识别"""
+    """合并同一成员+同一原因在时间窗口内的重复识别"""
     from collections import defaultdict
     groups = defaultdict(list)
     for e in events:
-        key = e.member_id or 0
+        mid = e.member_id or 0
+        reason = e.failure_reason or ''
+        key = (mid, reason)
         groups[key].append(e)
 
     result = []
-    for mid, evts in groups.items():
+    for (mid, reason), evts in groups.items():
         if len(evts) == 1:
             result.append(evts[0].to_dict())
             continue
-        # 按时间排序
         evts.sort(key=lambda x: x.created_at, reverse=True)
         merged = {
             'member_id': mid,
@@ -389,7 +390,7 @@ def _aggregate_events(events, window_seconds=10):
             'last_time': evts[0].created_at.isoformat() if evts[0].created_at else '',
             'matched': evts[0].matched,
             'checkin_created': any(e.checkin_created for e in evts),
-            'failure_reason': evts[0].failure_reason or '',
+            'failure_reason': reason,
             'liveness_passed': evts[0].liveness_passed,
             'aggregated': True,
         }

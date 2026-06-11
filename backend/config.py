@@ -32,6 +32,7 @@ MIN_FACE_SAMPLES = int(os.environ.get('MIN_FACE_SAMPLES', '3'))
 MAX_FACE_SAMPLES = int(os.environ.get('MAX_FACE_SAMPLES', '5'))
 DETECTION_EVERY_N_FRAMES = int(os.environ.get('DETECTION_EVERY_N_FRAMES', '5'))
 COOLDOWN_SECONDS = int(os.environ.get('COOLDOWN_SECONDS', '300'))
+ALLOW_MULTIPLE_IN_OUT = os.environ.get('ALLOW_MULTIPLE_IN_OUT', 'true').lower() == 'true'
 
 # ====== Flask ======
 FLASK_DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
