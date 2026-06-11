@@ -12,7 +12,7 @@ from config import (
     FLASK_DEBUG, FLASK_HOST, FLASK_PORT, FLASK_USE_SSL,
     ADMIN_INIT_USERNAME, ADMIN_INIT_PASSWORD, BASE_DIR
 )
-from security import init_security, hash_password
+from security import init_security
 from logger import app_logger
 
 import camera_service as camera_service_mod
