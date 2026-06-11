@@ -80,7 +80,7 @@ def manual_checkin(member_id, check_type, admin_name=''):
     db.session.add(record)
     db.session.flush()
 
-    from routes.admin import write_operation_log
+    from models import write_operation_log
     write_operation_log(
         action='MANUAL_CHECKIN',
         target_type='checkin',

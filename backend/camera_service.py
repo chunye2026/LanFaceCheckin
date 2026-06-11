@@ -193,7 +193,7 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
     if cam:
         cam.last_frame_time = now; cam.fps = _status.get('fps', 0.0)
         cam.last_error = _status.get('last_error', '')
-        db.session.merge(cam); db.session.commit()
+        db.session.commit()
 
 
 _last_liveness_data = {'embedding': None, 'positions': [], 'blink_frames': []}

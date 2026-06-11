@@ -4,8 +4,26 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import bcrypt
+from flask import request, g
 
 db = SQLAlchemy()
+
+
+def write_operation_log(action, target_type='', target_id=0, target_name='', detail=''):
+    """统一写操作日志"""
+    try:
+        log = OperationLog(
+            admin_id=getattr(g, 'admin_id', None),
+            admin_name=getattr(g, 'admin_name', ''),
+            action=action, target_type=target_type, target_id=target_id,
+            target_name=target_name, detail=detail,
+            ip_address=request.remote_addr or ''
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        import logging
+        logging.getLogger('app').exception('write_operation_log failed')
 
 
 class Admin(db.Model):

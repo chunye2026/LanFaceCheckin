@@ -65,15 +65,14 @@ def create_app():
     def static_files(path):
         try:
             return app.send_static_file(path)
-        except:
+        except Exception:
             return app.send_static_file('index.html')
 
-    # 初始化默认数据
+    # 初始化
     with app.app_context():
         db.create_all()
         camera_service_mod.init_app(app)
-        if FLASK_DEBUG:
-            _init_defaults()
+        _init_defaults()
 
     app_logger.info('Application created successfully')
     return app

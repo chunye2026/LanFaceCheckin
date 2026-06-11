@@ -5,7 +5,7 @@ import csv
 import io
 from datetime import datetime
 from flask import Blueprint, request, jsonify, g, Response
-from models import db, Admin, Member, FaceSample, FaceEmbedding, CameraDevice, RecognitionEvent, CheckinRecord, OperationLog
+from models import db, Admin, Member, FaceSample, FaceEmbedding, CameraDevice, RecognitionEvent, CheckinRecord, OperationLog, write_operation_log
 from security import admin_required, hash_password, verify_password, validate_image_upload, generate_random_password
 from face_service import extract_embedding, embedding_to_json, is_model_available, verify_face_image
 from storage import save_upload, delete_file
@@ -13,24 +13,6 @@ from logger import app_logger, security_logger
 from config import MIN_FACE_SAMPLES, MAX_FACE_SAMPLES, UPLOAD_FOLDER
 
 admin_bp = Blueprint('admin', __name__)
-
-
-def write_operation_log(action, target_type='', target_id=0, target_name='', detail=''):
-    try:
-        log = OperationLog(
-            admin_id=getattr(g, 'admin_id', None),
-            admin_name=getattr(g, 'admin_name', ''),
-            action=action,
-            target_type=target_type,
-            target_id=target_id,
-            target_name=target_name,
-            detail=detail,
-            ip_address=request.remote_addr or ''
-        )
-        db.session.add(log)
-        db.session.commit()
-    except Exception:
-        app_logger.exception('write_operation_log failed')
 
 
 # ========== 认证 ==========
@@ -133,13 +115,15 @@ def update_member(mid):
 def delete_member(mid):
     m = Member.query.get(mid)
     if not m: return jsonify({'code': 404, 'message': '成员不存在'})
-    # 删除关联人脸样本文件和 embedding
+    # 删除关联数据
     for s in m.face_samples.all():
         delete_file(s.image_path)
     FaceEmbedding.query.filter_by(member_id=mid).delete()
     FaceSample.query.filter_by(member_id=mid).delete()
     CheckinRecord.query.filter_by(member_id=mid).delete()
-    RecognitionEvent.query.filter_by(member_id=mid).update({'member_id': None})
+    # 识别事件解除关联
+    for event in RecognitionEvent.query.filter_by(member_id=mid).all():
+        event.member_id = None
     name = m.name
     write_operation_log('DELETE_MEMBER', 'member', mid, name, f'删除成员: {name}')
     db.session.delete(m)
@@ -210,10 +194,13 @@ def delete_face_sample(sid):
 def camera_start():
     from camera_service import start
     ok, msg = start()
-    cam = CameraDevice.query.first() or CameraDevice()
+    cam = CameraDevice.query.first()
+    if not cam:
+        cam = CameraDevice(name='Default Camera', device_index=0)
+        db.session.add(cam)
+        db.session.flush()
     cam.status = 'running' if ok else 'error'
     cam.last_error = '' if ok else msg
-    db.session.merge(cam)
     db.session.commit()
     return jsonify({'code': 200 if ok else 400, 'message': msg})
 
