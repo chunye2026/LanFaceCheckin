@@ -240,7 +240,6 @@ def camera_status():
 
 
 @admin_bp.route('/api/admin/camera/snapshot', methods=['GET'])
-@admin_required
 def camera_snapshot():
     from camera_service import get_frame
     import cv2

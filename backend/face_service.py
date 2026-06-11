@@ -107,14 +107,25 @@ def verify_face_image(file_storage):
         file_storage.seek(0)
         if img is None:
             return False, '无法解析图片'
+
+        # InsightFace 检测
         handler = _get_handler()
-        if handler is None:
-            return False, '人脸模型未加载'
-        faces = handler.get(img)
-        if len(faces) == 0:
+        if handler is not None:
+            faces = handler.get(img)
+            if len(faces) == 0:
+                return False, '未检测到人脸'
+            if len(faces) > 1:
+                return False, f'检测到{len(faces)}张人脸，请上传单人照片'
+            return True, 'OK'
+
+        # OpenCV 降级检测
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        opencv_faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(80, 80))
+        if len(opencv_faces) == 0:
             return False, '未检测到人脸'
-        if len(faces) > 1:
-            return False, f'检测到{len(faces)}张人脸，请上传单人照片'
+        if len(opencv_faces) > 1:
+            return False, f'检测到{len(opencv_faces)}张人脸，请上传单人照片'
         return True, 'OK'
     except Exception as e:
         recognition_logger.exception('verify_face_image error')
