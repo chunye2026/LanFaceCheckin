@@ -16,6 +16,7 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   width: 100%;
+  background: #1a1a2e;
 }
 
 #app {

@@ -323,32 +323,99 @@ def manual_checkin():
 
 @admin_bp.route('/api/dashboard/status', methods=['GET'])
 def dashboard_status():
-    """公开 Dashboard 聚合接口，无需登录"""
+    """公开 Dashboard 聚合接口"""
     from camera_service import get_status as camera_get_status
     from face_service import is_model_available
+    from config import FACE_MATCH_THRESHOLD, MIN_FACE_SAMPLES
 
     cam = camera_get_status()
     cam['model_available'] = is_model_available()
 
     member_count = Member.query.filter_by(active=True).count()
+    eligible_count = len([m for m in Member.query.filter_by(active=True).all() if m.can_participate])
     today = datetime.now().strftime('%Y-%m-%d')
     today_in = CheckinRecord.query.filter(CheckinRecord.check_time >= f'{today} 00:00:00', CheckinRecord.check_type == 'in').count()
     today_out = CheckinRecord.query.filter(CheckinRecord.check_time >= f'{today} 00:00:00', CheckinRecord.check_type == 'out').count()
 
-    events = RecognitionEvent.query.order_by(RecognitionEvent.created_at.desc()).limit(10).all()
-    records = CheckinRecord.query.order_by(CheckinRecord.check_time.desc()).limit(10).all()
+    # 聚合最近事件(10秒内同一成员合并)
+    raw_events = RecognitionEvent.query.order_by(RecognitionEvent.created_at.desc()).limit(100).all()
+    aggregated = _aggregate_events(raw_events)
+
+    # 最近打卡记录
+    records = CheckinRecord.query.order_by(CheckinRecord.check_time.desc()).limit(15).all()
+
+    # 异常检测
+    alerts = _detect_alerts(cam, is_model_available(), member_count, eligible_count)
+
+    # 最近识别结果(含bbox)
+    last_result = cam.get('last_recognition_result')
 
     return jsonify({'code': 200, 'data': {
         'camera': cam,
-        'system': {
-            'member_count': member_count,
+        'stats': {
+            'member_total': member_count,
+            'eligible_count': eligible_count,
             'today_checkin': today_in,
             'today_checkout': today_out,
             'model_available': is_model_available(),
+            'threshold': FACE_MATCH_THRESHOLD,
+            'min_samples': MIN_FACE_SAMPLES,
         },
-        'recent_events': [e.to_dict() for e in events],
+        'alerts': alerts,
+        'aggregated_events': aggregated[:8],
         'recent_records': [r.to_dict() for r in records],
+        'last_recognition': last_result,
     }})
+
+
+def _aggregate_events(events, window_seconds=10):
+    """合并同一成员在时间窗口内的重复识别"""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for e in events:
+        key = e.member_id or 0
+        groups[key].append(e)
+
+    result = []
+    for mid, evts in groups.items():
+        if len(evts) == 1:
+            result.append(evts[0].to_dict())
+            continue
+        # 按时间排序
+        evts.sort(key=lambda x: x.created_at, reverse=True)
+        merged = {
+            'member_id': mid,
+            'member_name': evts[0].member_name,
+            'count': len(evts),
+            'max_confidence': max(e.confidence for e in evts),
+            'min_confidence': min(e.confidence for e in evts),
+            'last_time': evts[0].created_at.isoformat() if evts[0].created_at else '',
+            'matched': evts[0].matched,
+            'checkin_created': any(e.checkin_created for e in evts),
+            'failure_reason': evts[0].failure_reason or '',
+            'liveness_passed': evts[0].liveness_passed,
+            'aggregated': True,
+        }
+        result.append(merged)
+    result.sort(key=lambda x: x.get('last_time', ''), reverse=True)
+    return result
+
+
+def _detect_alerts(cam, model_ok, member_count, eligible_count):
+    alerts = []
+    if not cam.get('running'):
+        alerts.append({'level': 'info', 'msg': '摄像头未启动', 'icon': 'camera'})
+    if cam.get('last_error'):
+        alerts.append({'level': 'error', 'msg': f"摄像头错误: {cam['last_error'][:60]}", 'icon': 'camera'})
+    if not model_ok:
+        alerts.append({'level': 'error', 'msg': 'InsightFace 模型未加载', 'icon': 'model'})
+    if member_count == 0:
+        alerts.append({'level': 'warning', 'msg': '人脸库为空，请添加成员', 'icon': 'member'})
+    if eligible_count == 0 and member_count > 0:
+        alerts.append({'level': 'warning', 'msg': f'所有成员人脸样本不足({MIN_FACE_SAMPLES}张)', 'icon': 'sample'})
+    if cam.get('fps', 0) < 0.5 and cam.get('running'):
+        alerts.append({'level': 'warning', 'msg': '摄像头帧率过低(CPU可能降级)', 'icon': 'cpu'})
+    return alerts
 
 
 @admin_bp.route('/api/admin/operation-logs', methods=['GET'])
