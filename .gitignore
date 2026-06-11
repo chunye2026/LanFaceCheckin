@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+
+# Flask
+instance/
+
+# Database & Data
+backend/data/
+backend/uploads/
+
+# SSL certs (regenerate locally)
+backend/cert.pem
+backend/key.pem
+
+# InsightFace model (large, download separately)
+backend/models/insightface/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Logs
+*.log
