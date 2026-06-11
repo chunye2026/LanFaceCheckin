@@ -41,4 +41,5 @@ Thumbs.db
 .env.local
 
 # Logs
+backend/logs/
 *.log

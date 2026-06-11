@@ -64,7 +64,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { getAuditLogs, getActionTypes } from '../../api/index.js'
+import { getOperationLogs } from '../../api/index.js'
 
 const loading = ref(false)
 const logs = ref([])
@@ -116,7 +116,7 @@ async function fetchLogs() {
       params.date_from = filters.dateRange[0]
       params.date_to = filters.dateRange[1]
     }
-    const res = await getAuditLogs(params)
+    const res = await getOperationLogs(params)
     logs.value = res.data.list
     total.value = res.data.total
   } catch { /* handled */ }
@@ -138,11 +138,8 @@ function formatTime(isoStr) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-onMounted(async () => {
-  try {
-    const res = await getActionTypes()
-    actionTypes.value = res.data
-  } catch { /* ignore */ }
+onMounted(() => {
+  actionTypes.value = ['LOGIN', 'LOGIN_FAILED', 'CREATE_MEMBER', 'UPDATE_MEMBER', 'DELETE_MEMBER', 'UPLOAD_FACE', 'DELETE_FACE', 'CHECK_IN', 'CHECK_OUT', 'MANUAL_CHECKIN']
   fetchLogs()
 })
 </script>

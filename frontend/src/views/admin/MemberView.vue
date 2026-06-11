@@ -144,7 +144,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMembers, createMember, updateMember, deleteMember, uploadFace } from '../../api/index.js'
+import { getMembers, createMember, updateMember, deleteMember, uploadFaceSample } from '../../api/index.js'
 
 const loading = ref(false)
 const members = ref([])
@@ -269,7 +269,7 @@ async function handleFaceUpload() {
   }
   faceUploading.value = true
   try {
-    await uploadFace(currentMember.value.id, faceFile.value)
+    await uploadFaceSample(currentMember.value.id, faceFile.value)
     ElMessage.success('人脸录入成功')
     faceDialogVisible.value = false
     fetchMembers()

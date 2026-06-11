@@ -6,7 +6,6 @@ const api = axios.create({
   timeout: 30000
 })
 
-// 请求拦截器：自动附加token
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('admin_token')
   if (token) {
@@ -15,7 +14,6 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// 响应拦截器：统一错误处理
 api.interceptors.response.use(
   response => {
     const res = response.data
@@ -40,77 +38,105 @@ api.interceptors.response.use(
 /* ========== 认证 ========== */
 
 export function login(username, password) {
-  return api.post('/auth/login', { username, password })
+  return api.post('/admin/login', { username, password })
+}
+
+export function changePassword(oldPassword, newPassword) {
+  return api.post('/admin/change-password', { old_password: oldPassword, new_password: newPassword })
 }
 
 export function getAdminInfo() {
-  return api.get('/auth/info')
+  return api.get('/admin/info')
 }
 
 /* ========== 成员管理 ========== */
 
 export function getMembers(params = {}) {
-  return api.get('/members', { params })
-}
-
-export function getMember(id) {
-  return api.get(`/members/${id}`)
+  return api.get('/admin/members', { params })
 }
 
 export function createMember(data) {
-  return api.post('/members', data)
+  return api.post('/admin/members', data)
 }
 
 export function updateMember(id, data) {
-  return api.put(`/members/${id}`, data)
+  return api.put(`/admin/members/${id}`, data)
 }
 
 export function deleteMember(id) {
-  return api.delete(`/members/${id}`)
+  return api.delete(`/admin/members/${id}`)
 }
 
-export function uploadFace(memberId, file) {
+/* ========== 人脸样本 ========== */
+
+export function getFaceSamples(memberId) {
+  return api.get(`/admin/members/${memberId}/face-samples`)
+}
+
+export function uploadFaceSample(memberId, file) {
   const formData = new FormData()
   formData.append('file', file)
-  return api.post(`/members/${memberId}/face`, formData, {
+  return api.post(`/admin/members/${memberId}/face-samples`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
 
-export function deleteFace(memberId) {
-  return api.delete(`/members/${memberId}/face`)
+export function deleteFaceSample(sampleId) {
+  return api.delete(`/admin/face-samples/${sampleId}`)
 }
 
-/* ========== 打卡 ========== */
+/* ========== 摄像头 ========== */
 
-export function verifyFace(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  return api.post('/checkin/verify', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+export function cameraStart() {
+  return api.post('/admin/camera/start')
 }
 
-export function doCheckin(data) {
-  return api.post('/checkin/do', data)
+export function cameraStop() {
+  return api.post('/admin/camera/stop')
 }
 
-export function getCheckRecords(params = {}) {
+export function cameraStatus() {
+  return api.get('/admin/camera/status')
+}
+
+export function cameraSnapshot() {
+  return api.get('/admin/camera/snapshot', { responseType: 'blob' })
+}
+
+/* ========== 识别事件 ========== */
+
+export function getRecognitionEvents(params = {}) {
+  return api.get('/admin/recognition-events', { params })
+}
+
+/* ========== 考勤记录 ========== */
+
+export function getCheckinRecords(params = {}) {
+  return api.get('/admin/checkin-records', { params })
+}
+
+export function manualCheckin(memberId, checkType) {
+  return api.post('/admin/checkin-records/manual', { member_id: memberId, check_type: checkType })
+}
+
+/* ========== 系统 ========== */
+
+export function getSystemStatus() {
+  return api.get('/admin/system/status')
+}
+
+export function getOperationLogs(params = {}) {
+  return api.get('/admin/operation-logs', { params })
+}
+
+/* ========== 打卡记录（公开） ========== */
+
+export function getDashboardStatus() {
+  return api.get('/dashboard/status')
+}
+
+export function getPublicRecords(params = {}) {
   return api.get('/checkin/records', { params })
-}
-
-export function getTodayStatus(memberId) {
-  return api.get(`/checkin/today-status/${memberId}`)
-}
-
-/* ========== 日志 ========== */
-
-export function getAuditLogs(params = {}) {
-  return api.get('/logs', { params })
-}
-
-export function getActionTypes() {
-  return api.get('/logs/action-types')
 }
 
 export default api

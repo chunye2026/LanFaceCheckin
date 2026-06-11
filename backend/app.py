@@ -1,43 +1,62 @@
 """
-人脸识别局域网打卡系统 - 后端入口
+人脸识别考勤系统 - 后端入口
+无感识别 + 管理员后台
 """
 import os
-import ssl
+import secrets
 from flask import Flask, send_from_directory
 from flask_cors import CORS
-from models import db, Admin
-from config import DATABASE_PATH, UPLOAD_FOLDER, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD, SECRET_KEY, BASE_DIR
-from routes.auth import auth_bp
-from routes.member import member_bp
-from routes.checkin import checkin_bp
-from routes.log import log_bp
+from models import db, Admin, CameraDevice
+from config import (
+    SECRET_KEY, DATABASE_URL, UPLOAD_FOLDER, CORS_ALLOWED_ORIGINS,
+    FLASK_DEBUG, FLASK_HOST, FLASK_PORT, FLASK_USE_SSL,
+    ADMIN_INIT_USERNAME, ADMIN_INIT_PASSWORD, BASE_DIR
+)
+from security import init_security, hash_password
+from logger import app_logger
+
+import camera_service as camera_service_mod
+
 
 
 def create_app():
     app = Flask(__name__, static_folder='../frontend/dist', static_url_path='')
-
-    # 配置
     app.config['SECRET_KEY'] = SECRET_KEY
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DATABASE_PATH}'
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 最大上传16MB
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-    # 初始化扩展
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # CORS 白名单
+    CORS(app, resources={r"/api/*": {"origins": CORS_ALLOWED_ORIGINS}})
+
+    # 安全模块
+    init_security(app.config)
+
+    # 数据库
     db.init_app(app)
 
-    # 注册蓝图
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(member_bp)
-    app.register_blueprint(checkin_bp)
-    app.register_blueprint(log_bp)
+    # 注册路由
+    from routes.admin import admin_bp
+    app.register_blueprint(admin_bp)
+
+    # 保留打卡记录公开查询（无需登录，供前端监控台使用）
+    from models import CheckinRecord
+    from flask import jsonify, request
+    @app.route('/api/checkin/records', methods=['GET'])
+    def public_records():
+        today = request.args.get('today', '')
+        q = CheckinRecord.query
+        if today:
+            q = q.filter(CheckinRecord.check_time >= f'{today} 00:00:00')
+        records = q.order_by(CheckinRecord.check_time.desc()).limit(20).all()
+        return jsonify({'code': 200, 'data': [r.to_dict() for r in records]})
 
     # 上传文件访问
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
         return send_from_directory(UPLOAD_FOLDER, filename)
 
-    # 前端SPA路由（生产环境）
+    # 前端 SPA
     @app.route('/')
     def index():
         return app.send_static_file('index.html')
@@ -49,44 +68,55 @@ def create_app():
         except:
             return app.send_static_file('index.html')
 
-    # 初始化数据库和默认管理员
+    # 初始化默认数据
     with app.app_context():
         db.create_all()
+        camera_service_mod.init_app(app)
+        if FLASK_DEBUG:
+            _init_defaults()
 
-        # 创建默认管理员
-        if not Admin.query.filter_by(username=DEFAULT_ADMIN_USERNAME).first():
-            admin = Admin(username=DEFAULT_ADMIN_USERNAME)
-            admin.set_password(DEFAULT_ADMIN_PASSWORD)
-            db.session.add(admin)
-            db.session.commit()
-            print(f'[初始化] 默认管理员已创建: {DEFAULT_ADMIN_USERNAME} / {DEFAULT_ADMIN_PASSWORD}')
-
+    app_logger.info('Application created successfully')
     return app
+
+
+def _init_defaults():
+    """初始化默认数据（仅开发环境）"""
+    if not Admin.query.filter_by(username=ADMIN_INIT_USERNAME).first():
+        pw = ADMIN_INIT_PASSWORD
+        if not pw:
+            pw = secrets.token_urlsafe(8)
+            print(f'[INIT] 管理员随机密码: {pw}')
+        admin = Admin(username=ADMIN_INIT_USERNAME, must_change_password=(not ADMIN_INIT_PASSWORD))
+        admin.set_password(pw)
+        db.session.add(admin)
+        db.session.commit()
+        app_logger.info(f'Default admin created: {ADMIN_INIT_USERNAME}')
+
+    if not CameraDevice.query.first():
+        cam = CameraDevice(name='Default Camera', device_index=0)
+        db.session.add(cam)
+        db.session.commit()
 
 
 if __name__ == '__main__':
     app = create_app()
-
-    # SSL 证书路径
+    use_ssl = FLASK_USE_SSL
     cert_path = os.path.join(BASE_DIR, 'cert.pem')
     key_path = os.path.join(BASE_DIR, 'key.pem')
+    if use_ssl and not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        use_ssl = False
 
-    use_ssl = os.path.exists(cert_path) and os.path.exists(key_path)
-
+    proto = 'https' if use_ssl else 'http'
     print('=' * 55)
-    print('  人脸识别局域网打卡系统 - 后端服务')
-    print(f'  默认管理员: admin / admin123')
-    if use_ssl:
-        print(f'  HTTPS 模式: https://127.0.0.1:5000')
-        print('  提示: 自签名证书，浏览器会提示不安全，点击"继续访问"即可')
-    else:
-        print(f'  HTTP 模式: http://127.0.0.1:5000')
-        print('  警告: 局域网IP访问时摄像头将无法使用，请用127.0.0.1访问')
+    print('  人脸识别考勤系统')
+    print(f'  管理员: {ADMIN_INIT_USERNAME}')
+    print(f'  地址: {proto}://127.0.0.1:{FLASK_PORT}')
     print('=' * 55)
 
     if use_ssl:
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(cert_path, key_path)
-        app.run(host='0.0.0.0', port=5000, debug=True, ssl_context=ssl_context)
+        import ssl
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.load_cert_chain(cert_path, key_path)
+        app.run(host=FLASK_HOST, port=FLASK_PORT, debug=FLASK_DEBUG, ssl_context=ssl_ctx)
     else:
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        app.run(host=FLASK_HOST, port=FLASK_PORT, debug=FLASK_DEBUG)

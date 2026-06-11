@@ -3,32 +3,25 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
-    name: 'checkin',
-    component: () => import('../views/CheckinView.vue')
+    name: 'dashboard',
+    component: () => import('../views/DashboardView.vue')
   },
   {
     path: '/admin/login',
     name: 'admin-login',
-    component: () => import('../views/admin/LoginView.vue')
+    component: () => import('../views/LoginView.vue')
   },
   {
     path: '/admin',
-    component: () => import('../views/admin/LayoutView.vue'),
+    component: () => import('../views/LayoutView.vue'),
     children: [
-      {
-        path: '',
-        redirect: '/admin/members'
-      },
-      {
-        path: 'members',
-        name: 'admin-members',
-        component: () => import('../views/admin/MemberView.vue')
-      },
-      {
-        path: 'logs',
-        name: 'admin-logs',
-        component: () => import('../views/admin/LogView.vue')
-      }
+      { path: '', redirect: '/admin/dashboard' },
+      { path: 'dashboard', name: 'admin-dashboard', component: () => import('../views/DashboardView.vue') },
+      { path: 'members', name: 'admin-members', component: () => import('../views/admin/MemberView.vue') },
+      { path: 'camera', name: 'admin-camera', component: () => import('../views/CameraView.vue') },
+      { path: 'recognition-events', name: 'admin-events', component: () => import('../views/RecognitionEventView.vue') },
+      { path: 'attendance', name: 'admin-attendance', component: () => import('../views/AttendanceView.vue') },
+      { path: 'logs', name: 'admin-logs', component: () => import('../views/admin/LogView.vue') },
     ]
   }
 ]
@@ -38,7 +31,6 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：管理后台需要登录
 router.beforeEach((to, from, next) => {
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     const token = localStorage.getItem('admin_token')
