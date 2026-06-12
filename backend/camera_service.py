@@ -278,8 +278,10 @@ def _draw_detections(frame, detections):
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
 
         h, w = frame.shape[:2]
+        # 排序：未匹配(红)先画，已匹配(绿/黄)后画，避免被覆盖
+        detections_sorted = sorted(detections, key=lambda d: (d.get('matched', False), d.get('checkin_created', False)))
         drawn = 0
-        for det in detections:
+        for det in detections_sorted:
             bbox = det.get('bbox') or []
             if len(bbox) != 4:
                 recognition_logger.warning(f'Skipped detection: invalid bbox={bbox}')

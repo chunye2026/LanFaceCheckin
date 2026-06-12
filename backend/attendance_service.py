@@ -108,6 +108,9 @@ def _create_record(member, event, check_type, reason):
     db.session.add(record)
     db.session.flush()
 
+    # 更新成员最近打卡时间
+    member.last_check_time = record.check_time
+
     event.checkin_created = True
 
     app_logger.info(f'Auto {check_type}: {member.name} conf={event.confidence:.4f}')

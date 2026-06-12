@@ -55,6 +55,7 @@ class Member(db.Model):
     phone = db.Column(db.String(20), default='')
     email = db.Column(db.String(100), default='')
     active = db.Column(db.Boolean, default=True)
+    last_check_time = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -81,6 +82,7 @@ class Member(db.Model):
             'active': self.active,
             'sample_count': self.sample_count,
             'can_participate': self.can_participate,
+            'last_check_time': self.last_check_time.isoformat() if self.last_check_time else '',
             'created_at': self.created_at.isoformat() if self.created_at else '',
             'updated_at': self.updated_at.isoformat() if self.updated_at else '',
         }
@@ -194,6 +196,10 @@ class CheckinRecord(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     member = db.relationship('Member', backref='records')
+
+    __table_args__ = (
+        db.Index('ix_checkin_member_time', 'member_id', 'check_time'),
+    )
 
     def to_dict(self):
         return {
