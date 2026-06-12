@@ -123,4 +123,8 @@ export function getDashboardStatus() {
   return api.get('/dashboard/status')
 }
 
+export function getAttendanceSummary() {
+  return api.get('/dashboard/attendance-summary')
+}
+
 export default api

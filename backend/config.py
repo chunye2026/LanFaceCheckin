@@ -34,6 +34,16 @@ DETECTION_EVERY_N_FRAMES = int(os.environ.get('DETECTION_EVERY_N_FRAMES', '5'))
 COOLDOWN_SECONDS = int(os.environ.get('COOLDOWN_SECONDS', '300'))
 ALLOW_MULTIPLE_IN_OUT = os.environ.get('ALLOW_MULTIPLE_IN_OUT', 'true').lower() == 'true'
 
+# ====== Dashboard 大屏 ======
+DASHBOARD_DRAW_FACE_BOX = os.environ.get('DASHBOARD_DRAW_FACE_BOX', 'true').lower() == 'true'
+DASHBOARD_SHOW_PHONE = os.environ.get('DASHBOARD_SHOW_PHONE', 'true').lower() == 'true'
+DASHBOARD_SHOW_EMAIL = os.environ.get('DASHBOARD_SHOW_EMAIL', 'true').lower() == 'true'
+DASHBOARD_MASK_PHONE = os.environ.get('DASHBOARD_MASK_PHONE', 'true').lower() == 'true'
+DASHBOARD_MASK_EMAIL = os.environ.get('DASHBOARD_MASK_EMAIL', 'true').lower() == 'true'
+DASHBOARD_TOP_N = int(os.environ.get('DASHBOARD_TOP_N', '10'))
+WORKDAY_WEEKDAYS = [int(x) for x in os.environ.get('WORKDAY_WEEKDAYS', '0,1,2,3,4').split(',') if x.strip() != '']
+ATTENDANCE_DAY_RULE = os.environ.get('ATTENDANCE_DAY_RULE', 'any_record')
+
 # ====== Flask ======
 FLASK_DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
 FLASK_HOST = os.environ.get('FLASK_HOST', '0.0.0.0')

@@ -243,22 +243,40 @@ def camera_snapshot():
 
 @admin_bp.route('/api/admin/camera/stream', methods=['GET'])
 def camera_stream():
-    """MJPEG 实时视频流"""
-    from camera_service import get_frame
+    """MJPEG 视频流(后台管理用)"""
+    from camera_service import get_stream_frame
     import cv2
 
     def generate():
         while True:
-            frame = get_frame()
+            frame = get_stream_frame(annotated=False)
             if frame is None:
-                # 返回占位图
-                placeholder = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + placeholder.tobytes() + b'\r\n')
+                frame = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
             else:
                 _, buf = cv2.imencode('.jpg', frame)
                 yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
-            import time
-            time.sleep(0.1)
+            import time; time.sleep(0.1)
+
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@admin_bp.route('/api/dashboard/stream', methods=['GET'])
+def dashboard_stream():
+    """大屏只读 MJPEG 流(带人脸框)"""
+    from camera_service import get_stream_frame
+    import cv2
+
+    def generate():
+        while True:
+            frame = get_stream_frame(annotated=True)
+            if frame is None:
+                frame = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+            else:
+                _, buf = cv2.imencode('.jpg', frame)
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+            import time; time.sleep(0.1)
 
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -419,6 +437,19 @@ def _detect_alerts(cam, model_ok, member_count, eligible_count):
     if cam.get('fps', 0) < 0.5 and cam.get('running'):
         alerts.append({'level': 'warning', 'msg': '摄像头帧率过低(CPU可能降级)', 'icon': 'cpu'})
     return alerts
+
+
+@admin_bp.route('/api/dashboard/attendance-summary', methods=['GET'])
+def dashboard_attendance_summary():
+    """本周/本月综合考勤统计"""
+    from attendance_stats_service import get_dashboard_attendance_summary
+    try:
+        summary = get_dashboard_attendance_summary()
+        return jsonify({'code': 200, 'data': summary})
+    except Exception as e:
+        from logger import app_logger
+        app_logger.exception('Attendance summary error')
+        return jsonify({'code': 500, 'message': str(e)})
 
 
 @admin_bp.route('/api/admin/operation-logs', methods=['GET'])
