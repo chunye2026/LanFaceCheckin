@@ -149,11 +149,9 @@ def _run_loop():
                     with _frame_lock:
                         _latest_annotated_frame = annotated.copy()
             else:
-                # 非检测帧：保持上次的识别结果和标注
-                if _frame_lock:
-                    with _frame_lock:
-                        if _latest_raw_frame is not None:
-                            _latest_raw_frame = frame.copy()
+                # 非检测帧：保持上次的识别结果，只更新原始帧
+                with _frame_lock:
+                    _latest_raw_frame = frame.copy()
 
         except Exception as e:
             _status['last_error'] = str(e)
@@ -189,7 +187,10 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
     base['distance'] = match_result['distance']
 
     if not match_result['matched']:
+        # 未匹配: 保留 bbox, 设 matched=False, 置信度用实际值
         base['failure_reason'] = 'confidence_too_low'
+        base['matched'] = False
+        base['member_name'] = ''
         try:
             event = RecognitionEvent(camera_id=CAMERA_INDEX, matched=False, confidence=base['confidence'],
                                      bbox=str(bbox), failure_reason=base['failure_reason'])
@@ -269,10 +270,12 @@ def _draw_detections(frame, detections):
         return frame
     try:
         h, w = frame.shape[:2]
+        drawn = 0
         for det in detections:
             bbox = det.get('bbox') or []
             if len(bbox) != 4: continue
-            x1, y1, x2, y2 = [max(0, min(int(v), w-1 if i%2==0 else h-1)) for i, v in enumerate(bbox)]
+            x1, y1, x2, y2 = [max(0, min(int(v), (w-1) if i%2==0 else (h-1))) for i, v in enumerate(bbox)]
+            if x2 <= x1 or y2 <= y1: continue
 
             matched = det.get('matched', False)
             checkin = det.get('checkin_created', False)
@@ -295,14 +298,10 @@ def _draw_detections(frame, detections):
             name = det.get('member_name', '')
             eid = det.get('employee_id', '')
             conf = det.get('confidence', 0)
-            lines = []
-            if name: lines.append(f'{name}({eid})' if eid else name)
-            lines.append(f'置信:{conf*100:.1f}%')
-            lines.append(status)
+            lines = [f'{name}({eid})' if (name and eid) else (name or '陌生人'),
+                     f'置信:{conf*100:.1f}%', status]
 
-            # 信息卡背景
-            bw = 240
-            lh = 22
+            bw, lh = 240, 22
             bh = len(lines) * lh + 10
             bx, by = x1, max(0, y1 - bh - 6)
             if by + bh > h: by = min(h - bh - 1, y2 + 6)
@@ -314,7 +313,10 @@ def _draw_detections(frame, detections):
             for line in lines:
                 cv2.putText(frame, line, (bx+6, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
                 ty += lh
+            drawn += 1
 
+        if drawn > 0:
+            recognition_logger.info(f'Drew {drawn} face boxes on frame')
         return frame
     except Exception:
         recognition_logger.exception('draw detections failed')
