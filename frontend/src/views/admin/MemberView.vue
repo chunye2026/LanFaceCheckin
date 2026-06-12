@@ -2,7 +2,7 @@
   <el-card shadow="never">
     <!-- 工具栏 -->
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="搜索姓名/工号/部门" clearable style="width:240px"
+      <el-input v-model="keyword" placeholder="搜索姓名/学号/班级" clearable style="width:240px"
         :prefix-icon="Search" @clear="fetchMembers" @keyup.enter="fetchMembers" />
       <el-button type="primary" @click="fetchMembers"><el-icon><Search /></el-icon> 搜索</el-button>
       <div class="toolbar-spacer" />
@@ -13,8 +13,8 @@
     <el-table :data="pagedMembers" stripe border v-loading="loading" empty-text="暂无成员">
       <el-table-column type="index" label="#" width="50" align="center" />
       <el-table-column prop="name" label="姓名" width="100" />
-      <el-table-column prop="employee_id" label="工号" width="100" />
-      <el-table-column prop="department" label="部门" min-width="100" show-overflow-tooltip />
+      <el-table-column prop="employee_id" label="学号" width="100" />
+      <el-table-column prop="department" label="班级" min-width="100" show-overflow-tooltip />
       <el-table-column label="人脸样本" width="160" align="center">
         <template #default="{ row }">
           <div class="sample-cell">
@@ -58,11 +58,11 @@
       <el-form-item label="姓名" prop="name">
         <el-input v-model="form.name" placeholder="请输入姓名" />
       </el-form-item>
-      <el-form-item label="工号" prop="employee_id">
-        <el-input v-model="form.employee_id" placeholder="请输入工号" :disabled="isEdit" />
+      <el-form-item label="学号" prop="employee_id">
+        <el-input v-model="form.employee_id" placeholder="请输入学号" :disabled="isEdit" />
       </el-form-item>
-      <el-form-item label="部门">
-        <el-input v-model="form.department" placeholder="请输入部门" />
+      <el-form-item label="班级">
+        <el-input v-model="form.department" placeholder="请输入班级" />
       </el-form-item>
       <el-form-item label="电话">
         <el-input v-model="form.phone" placeholder="请输入电话" />
@@ -83,7 +83,7 @@
     <div v-if="currentMember" class="face-dialog">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="姓名">{{ currentMember.name }}</el-descriptions-item>
-        <el-descriptions-item label="工号">{{ currentMember.employee_id }}</el-descriptions-item>
+        <el-descriptions-item label="学号">{{ currentMember.employee_id }}</el-descriptions-item>
       </el-descriptions>
 
       <el-divider />
@@ -165,7 +165,7 @@ const editingId = ref(null)
 const form = reactive({ name: '', employee_id: '', department: '', phone: '', email: '' })
 const formRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  employee_id: [{ required: true, message: '请输入工号', trigger: 'blur' }]
+  employee_id: [{ required: true, message: '请输入学号', trigger: 'blur' }]
 }
 
 const faceDialogVisible = ref(false)

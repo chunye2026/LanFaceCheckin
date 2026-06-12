@@ -293,27 +293,25 @@ def _draw_detections(frame, detections):
             checkin = det.get('checkin_created', False)
 
             if not matched:
-                color = (0, 0, 255)        # 红
-                status = '未匹配'
-            elif checkin:
-                color = (0, 255, 0)        # 绿
-                status = '已打卡'
+                color = (0, 0, 255)        # 红: 陌生人
+                status = '陌生人'
             else:
-                color = (0, 215, 255)      # 黄
-                reason = det.get('failure_reason', '')
-                status_map = {'cooldown_not_reached': '冷却中', 'liveness_failed': '活体失败',
-                              'checkin_failed': '打卡失败', 'confidence_too_low': '低置信'}
-                status = status_map.get(reason, '已识别')
+                color = (0, 215, 255)      # 黄: 已录入人员
+                status = '已录入'
 
             recognition_logger.debug(f'Draw bbox={[x1,y1,x2,y2]} name={det.get("member_name","?")} matched={matched} color={color}')
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
 
-            name = det.get('member_name', '')
-            eid = det.get('employee_id', '')
-            conf = det.get('confidence', 0)
-            lines = [f'{name}({eid})' if (name and eid) else (name or '陌生人'),
-                     f'置信:{conf*100:.1f}%', status]
+            if matched:
+                name = det.get('member_name', '')
+                eid = det.get('employee_id', '')
+                dept = det.get('department', '')
+                lines = [f'姓名: {name}']
+                if eid: lines.append(f'学号: {eid}')
+                if dept: lines.append(f'班级: {dept}')
+            else:
+                lines = ['陌生人']
 
             bw, lh = 240, 22
             bh = len(lines) * lh + 10
