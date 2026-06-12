@@ -18,12 +18,33 @@ _thread = None
 _frame_count = 0
 _last_recognized = {}
 _flask_app = None
+_embedding_cache = None  # [(member_id, member_name, embedding_json), ...]
 
 
 def init_app(app):
     """注入 Flask app 引用，避免循环导入"""
     global _flask_app
     _flask_app = app
+
+
+def invalidate_embedding_cache():
+    """成员人脸变更时清除缓存"""
+    global _embedding_cache
+    _embedding_cache = None
+
+
+def _load_embeddings():
+    global _embedding_cache
+    from models import Member
+    members = Member.query.filter_by(active=True).all()
+    eligible = [m for m in members if m.can_participate]
+    all_emb = []
+    for m in eligible:
+        for emb in m.face_embeddings.all():
+            if emb.embedding_json:
+                all_emb.append((m.id, m.name, emb.embedding_json))
+    _embedding_cache = all_emb
+    return _embedding_cache or []
 
 
 def get_status():
@@ -127,24 +148,19 @@ def _run_loop():
 
 
 def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_reason):
-    from models import db, Member, FaceEmbedding, RecognitionEvent, CameraDevice
+    from models import db, RecognitionEvent, CameraDevice
     from face_service import match_member
-    from config import FACE_MATCH_THRESHOLD, MIN_FACE_SAMPLES, COOLDOWN_SECONDS
+    from config import FACE_MATCH_THRESHOLD, COOLDOWN_SECONDS
     import datetime as dt
 
     result = {'matched': False, 'member_id': None, 'member_name': '', 'confidence': 0.0, 'distance': 0.0, 'bbox': bbox}
 
-    members = Member.query.filter_by(active=True).all()
-    eligible = [m for m in members if m.can_participate]
-    if not eligible:
-        _status['last_recognition_result'] = result
-        return
+    # 使用缓存加载 embedding
+    global _embedding_cache
+    if _embedding_cache is None:
+        _embedding_cache = _load_embeddings()
+    all_embeddings = _embedding_cache
 
-    all_embeddings = []
-    for m in eligible:
-        for emb in m.face_embeddings.all():
-            if emb.embedding_json:
-                all_embeddings.append((m.id, m.name, emb.embedding_json))
     if not all_embeddings:
         _status['last_recognition_result'] = result
         return
@@ -152,6 +168,7 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
     match_result = match_member(embedding, all_embeddings, FACE_MATCH_THRESHOLD)
     match_result['bbox'] = bbox
 
+    # 先创建 event 并 flush 获取 ID
     event = RecognitionEvent(
         camera_id=CAMERA_INDEX, matched=match_result['matched'],
         member_id=match_result['member_id'], member_name=match_result['member_name'],
@@ -180,13 +197,17 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
 
     _last_recognized[mid] = now
 
+    # 先 flush event 获取 ID，再调用考勤决策
+    db.session.add(event)
+    db.session.flush()
+
     from attendance_service import process_recognition
     checkin_created, reason = process_recognition(event)
     event.checkin_created = checkin_created
     if not checkin_created:
         event.failure_reason = reason
 
-    db.session.add(event); db.session.commit()
+    db.session.commit()
     _status['last_recognition_result'] = match_result
 
     cam = CameraDevice.query.first()

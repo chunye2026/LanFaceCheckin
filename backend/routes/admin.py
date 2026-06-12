@@ -163,6 +163,8 @@ def upload_face_sample(mid):
     db.session.add(fe)
     write_operation_log('UPLOAD_FACE', 'member', m.id, m.name, f'上传人脸样本 #{sample.id}')
     db.session.commit()
+    from camera_service import invalidate_embedding_cache
+    invalidate_embedding_cache()
     return jsonify({'code': 200, 'message': '人脸样本上传成功', 'data': sample.to_dict()})
 
 
@@ -184,6 +186,8 @@ def delete_face_sample(sid):
     write_operation_log('DELETE_FACE', 'face_sample', s.id, '', f'删除人脸样本: member_id={mid}')
     db.session.delete(s)
     db.session.commit()
+    from camera_service import invalidate_embedding_cache
+    invalidate_embedding_cache()
     return jsonify({'code': 200, 'message': '已删除'})
 
 
@@ -192,8 +196,9 @@ def delete_face_sample(sid):
 @admin_bp.route('/api/admin/camera/start', methods=['POST'])
 @admin_required
 def camera_start():
-    from camera_service import start
+    from camera_service import start, invalidate_embedding_cache
     ok, msg = start()
+    invalidate_embedding_cache()
     cam = CameraDevice.query.first()
     if not cam:
         cam = CameraDevice(name='Default Camera', device_index=0)
