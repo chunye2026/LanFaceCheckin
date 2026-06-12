@@ -267,19 +267,54 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
 
 # ========== 绘制 ==========
 def _get_chinese_font(size=20):
+    """加载支持中文的字体，找不到时写日志而非静默回退"""
     from PIL import ImageFont
     import os
+
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+
     font_paths = [
-        r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+        os.path.join(base_dir, "assets", "fonts", "NotoSansCJK-Regular.otf"),
+        os.path.join(base_dir, "assets", "fonts", "NotoSansCJK-Regular.ttc"),
+        os.path.join(base_dir, "assets", "fonts", "SourceHanSansCN-Regular.otf"),
+        os.path.join(base_dir, "assets", "fonts", "simhei.ttf"),
+        os.path.join(base_dir, "assets", "fonts", "msyh.ttc"),
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\msyhbd.ttc",
+        r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\simsun.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.otf",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/truetype/arphic/ukai.ttc",
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
     ]
+
     for path in font_paths:
         if os.path.exists(path):
-            try: return ImageFont.truetype(path, size)
-            except: pass
+            try:
+                font = ImageFont.truetype(path, size)
+                try:
+                    recognition_logger.info(f"Chinese font loaded: {path}")
+                except Exception:
+                    pass
+                return font
+            except Exception as e:
+                try:
+                    recognition_logger.warning(f"Failed to load Chinese font {path}: {e}")
+                except Exception:
+                    pass
+
+    try:
+        recognition_logger.warning(
+            "No Chinese font found. Fallback to PIL default font. Chinese text may display as question marks."
+        )
+    except Exception:
+        pass
+
     return ImageFont.load_default()
 
 
@@ -325,22 +360,33 @@ def _draw_detections(frame, detections):
                 draw.rectangle([x1-off, y1-off, x2+off, y2+off], outline=box_color)
 
             if matched:
-                name = det.get('member_name', '')
-                eid = det.get('employee_id', '')
-                dept = det.get('department', '')
+                name = det.get("member_name", "")
+                eid = det.get("employee_id", "")
+                dept = det.get("department", "")
+
                 lines = []
-                if name: lines.append(f'姓名: {name}')
-                if eid: lines.append(f'学号: {eid}')
-                if dept: lines.append(f'班级: {dept}')
+                if name:
+                    lines.append(f"姓名：{name}")
+                if eid:
+                    lines.append(f"学号：{eid}")
+                if dept:
+                    lines.append(f"班级：{dept}")
             else:
-                lines = ['陌生人']
+                lines = ["陌生人"]
 
             if not lines: continue
 
             # 信息卡尺寸
             px, py, lh = 10, 8, 28
-            tw = max((draw.textbbox((0,0), l, font=font)[2] - draw.textbbox((0,0), l, font=font)[0]) for l in lines)
-            cw = max(140, min(tw + px*2 + 8, 320))
+            text_widths = []
+            for line in lines:
+                try:
+                    box = draw.textbbox((0, 0), line, font=font)
+                    text_widths.append(box[2] - box[0])
+                except Exception:
+                    text_widths.append(len(line) * 22)
+            tw = max(text_widths) if text_widths else 120
+            cw = max(160, min(tw + px * 2 + 8, 360))
             ch = py*2 + lh * len(lines)
             cx, cy = x1, y1 - ch - 8
             if cy < 0: cy = y2 + 8
