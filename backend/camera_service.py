@@ -266,71 +266,102 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
 
 
 # ========== 绘制 ==========
+def _get_chinese_font(size=20):
+    from PIL import ImageFont
+    import os
+    font_paths = [
+        r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+        r"C:\Windows\Fonts\simsun.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            try: return ImageFont.truetype(path, size)
+            except: pass
+    return ImageFont.load_default()
+
+
 def _draw_detections(frame, detections):
-    """在视频帧上绘制人脸框和人员信息(OpenCV)"""
+    """PIL中文绘制: 已录入/陌生人 人脸框+信息卡"""
     if frame is None or not detections:
         return frame
     try:
-        # RGBA→BGR 转换(部分摄像头返回RGBA)
+        import numpy as np
+        from PIL import Image, ImageDraw
+
         if len(frame.shape) == 3 and frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
         h, w = frame.shape[:2]
-        # 排序：未匹配(红)先画，已匹配(绿/黄)后画，避免被覆盖
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = Image.fromarray(rgb)
+        draw = ImageDraw.Draw(image, "RGBA")
+        font = _get_chinese_font(20)
+
         detections_sorted = sorted(detections, key=lambda d: (d.get('matched', False), d.get('checkin_created', False)))
         drawn = 0
+
         for det in detections_sorted:
             bbox = det.get('bbox') or []
-            if len(bbox) != 4:
-                recognition_logger.warning(f'Skipped detection: invalid bbox={bbox}')
-                continue
+            if len(bbox) != 4: continue
             x1, y1, x2, y2 = [max(0, min(int(v), (w-1) if i%2==0 else (h-1))) for i, v in enumerate(bbox)]
-            if x2 <= x1 or y2 <= y1:
-                recognition_logger.warning(f'Skipped detection: zero-size bbox=[{x1},{y1},{x2},{y2}]')
-                continue
+            if x2 <= x1 or y2 <= y1: continue
 
-            matched = det.get('matched', False)
-            checkin = det.get('checkin_created', False)
+            matched = bool(det.get('matched', False))
+            checkin = bool(det.get('checkin_created', False))
 
             if not matched:
-                color = (0, 0, 255)        # 红: 陌生人
-                status = '陌生人'
+                box_color = (255, 60, 60, 255)      # 红
+            elif checkin:
+                box_color = (60, 220, 80, 255)      # 绿
             else:
-                color = (0, 215, 255)      # 黄: 已录入人员
-                status = '已录入'
+                box_color = (255, 210, 0, 255)      # 黄
 
-            recognition_logger.debug(f'Draw bbox={[x1,y1,x2,y2]} name={det.get("member_name","?")} matched={matched} color={color}')
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+            # 画框
+            lw = 4
+            for off in range(lw):
+                draw.rectangle([x1-off, y1-off, x2+off, y2+off], outline=box_color)
 
             if matched:
                 name = det.get('member_name', '')
                 eid = det.get('employee_id', '')
                 dept = det.get('department', '')
-                lines = [f'姓名: {name}']
+                lines = []
+                if name: lines.append(f'姓名: {name}')
                 if eid: lines.append(f'学号: {eid}')
                 if dept: lines.append(f'班级: {dept}')
             else:
                 lines = ['陌生人']
 
-            bw, lh = 240, 22
-            bh = len(lines) * lh + 10
-            bx, by = x1, max(0, y1 - bh - 6)
-            if by + bh > h: by = min(h - bh - 1, y2 + 6)
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (bx, by), (min(bx+bw, w-1), min(by+bh, h-1)), (0, 0, 0), -1)
-            frame = cv2.addWeighted(overlay, 0.55, frame, 0.45, 0)
+            if not lines: continue
 
-            ty = by + 18
+            # 信息卡尺寸
+            px, py, lh = 10, 8, 28
+            tw = max((draw.textbbox((0,0), l, font=font)[2] - draw.textbbox((0,0), l, font=font)[0]) for l in lines)
+            cw = max(140, min(tw + px*2 + 8, 320))
+            ch = py*2 + lh * len(lines)
+            cx, cy = x1, y1 - ch - 8
+            if cy < 0: cy = y2 + 8
+            if cy + ch > h: cy = max(0, h - ch - 2)
+            if cx + cw > w: cx = max(0, w - cw - 2)
+
+            draw.rectangle([cx, cy, cx+cw, cy+ch], fill=(0,0,0,170))
+            draw.rectangle([cx, cy, cx+5, cy+ch], fill=box_color)
+
+            text_color = (255, 230, 80, 255) if matched else (255, 80, 80, 255)
+            ty = cy + py
             for line in lines:
-                cv2.putText(frame, line, (bx+6, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+                draw.text((cx + px, ty), line, font=font, fill=text_color)
                 ty += lh
             drawn += 1
 
-        recognition_logger.info(f'_draw_detections: input_dets={len(detections)} drawn={drawn} total')
-        return frame
+        result = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        recognition_logger.info(f'_draw_detections: input={len(detections)} drawn={drawn}')
+        return result
     except Exception:
-        recognition_logger.exception('draw detections failed')
+        recognition_logger.exception('_draw_detections PIL failed')
         return frame
 
 
