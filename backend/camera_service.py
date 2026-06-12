@@ -112,6 +112,10 @@ def _run_loop():
             if len(frame_times) >= 2:
                 _status['fps'] = round(len(frame_times) / (frame_times[-1] - frame_times[0]), 1)
 
+            # RGBA→BGR(部分摄像头返回RGBA)
+            if len(frame.shape) == 3 and frame.shape[2] == 4:
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+
             # 保存原始帧
             with _frame_lock:
                 _latest_raw_frame = frame.copy()
@@ -269,13 +273,21 @@ def _draw_detections(frame, detections):
     if frame is None or not detections:
         return frame
     try:
+        # RGBA→BGR 转换(部分摄像头返回RGBA)
+        if len(frame.shape) == 3 and frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+
         h, w = frame.shape[:2]
         drawn = 0
         for det in detections:
             bbox = det.get('bbox') or []
-            if len(bbox) != 4: continue
+            if len(bbox) != 4:
+                recognition_logger.warning(f'Skipped detection: invalid bbox={bbox}')
+                continue
             x1, y1, x2, y2 = [max(0, min(int(v), (w-1) if i%2==0 else (h-1))) for i, v in enumerate(bbox)]
-            if x2 <= x1 or y2 <= y1: continue
+            if x2 <= x1 or y2 <= y1:
+                recognition_logger.warning(f'Skipped detection: zero-size bbox=[{x1},{y1},{x2},{y2}]')
+                continue
 
             matched = det.get('matched', False)
             checkin = det.get('checkin_created', False)
@@ -292,6 +304,8 @@ def _draw_detections(frame, detections):
                 status_map = {'cooldown_not_reached': '冷却中', 'liveness_failed': '活体失败',
                               'checkin_failed': '打卡失败', 'confidence_too_low': '低置信'}
                 status = status_map.get(reason, '已识别')
+
+            recognition_logger.debug(f'Draw bbox={[x1,y1,x2,y2]} name={det.get("member_name","?")} matched={matched} color={color}')
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
 
@@ -315,8 +329,7 @@ def _draw_detections(frame, detections):
                 ty += lh
             drawn += 1
 
-        if drawn > 0:
-            recognition_logger.info(f'Drew {drawn} face boxes on frame')
+        recognition_logger.info(f'_draw_detections: input_dets={len(detections)} drawn={drawn} total')
         return frame
     except Exception:
         recognition_logger.exception('draw detections failed')
