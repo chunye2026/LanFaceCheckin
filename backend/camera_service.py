@@ -264,82 +264,60 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
 
 # ========== 绘制 ==========
 def _draw_detections(frame, detections):
-    """使用PIL在帧上绘制中文标注"""
+    """在视频帧上绘制人脸框和人员信息(OpenCV)"""
+    if frame is None or not detections:
+        return frame
     try:
-        from PIL import Image, ImageDraw, ImageFont
-        import os
+        h, w = frame.shape[:2]
+        for det in detections:
+            bbox = det.get('bbox') or []
+            if len(bbox) != 4: continue
+            x1, y1, x2, y2 = [max(0, min(int(v), w-1 if i%2==0 else h-1)) for i, v in enumerate(bbox)]
 
-        # 尝试中文字体
-        font_paths = [
-            'C:/Windows/Fonts/msyh.ttc',
-            'C:/Windows/Fonts/simhei.ttf',
-            'C:/Windows/Fonts/simsun.ttc',
-            '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-        ]
-        font = None
-        for fp in font_paths:
-            if os.path.exists(fp):
-                try: font = ImageFont.truetype(fp, 16); break
-                except: pass
+            matched = det.get('matched', False)
+            checkin = det.get('checkin_created', False)
 
-        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(img)
-
-        for d in detections:
-            x1, y1, x2, y2 = d['bbox']
-            matched = d.get('matched')
-            checkin = d.get('checkin_created')
-
-            if checkin:
-                color = (103, 194, 58)  # 绿
-                status_text = '已打卡'
-            elif matched:
-                color = (230, 162, 60)  # 黄
-                status_text = d.get('failure_reason', '')
-                status_map = {'cooldown_not_reached': '冷却中', 'liveness_failed': '活体失败',
-                              'checkin_failed': '打卡失败', 'insufficient_face_samples': '样本不足'}
-                status_text = status_map.get(status_text, status_text)
+            if not matched:
+                color = (0, 0, 255)        # 红
+                status = '未匹配'
+            elif checkin:
+                color = (0, 255, 0)        # 绿
+                status = '已打卡'
             else:
-                color = (245, 108, 108)  # 红
-                status_text = '未匹配'
+                color = (0, 215, 255)      # 黄
+                reason = det.get('failure_reason', '')
+                status_map = {'cooldown_not_reached': '冷却中', 'liveness_failed': '活体失败',
+                              'checkin_failed': '打卡失败', 'confidence_too_low': '低置信'}
+                status = status_map.get(reason, '已识别')
 
-            # 绘制矩形
-            draw.rectangle([x1, y1, x2, y2], outline=color, width=2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
 
-            # 构建信息文本
+            name = det.get('member_name', '')
+            eid = det.get('employee_id', '')
+            conf = det.get('confidence', 0)
             lines = []
-            if d.get('member_name'):
-                lines.append(f"{d['member_name']}  {d.get('confidence',0)*100:.1f}%")
-            if d.get('employee_id'):
-                lines.append(f"工号:{d['employee_id']}")
-            if d.get('department'):
-                lines.append(d['department'])
-            if d.get('phone'):
-                from config import DASHBOARD_SHOW_PHONE
-                if DASHBOARD_SHOW_PHONE: lines.append(f"☎{d['phone']}")
-            if d.get('email'):
-                from config import DASHBOARD_SHOW_EMAIL
-                if DASHBOARD_SHOW_EMAIL: lines.append(f"✉{d['email']}")
-            lines.append(status_text if status_text else '未知')
+            if name: lines.append(f'{name}({eid})' if eid else name)
+            lines.append(f'置信:{conf*100:.1f}%')
+            lines.append(status)
 
-            # 计算背景块
-            line_height = 20
-            bw = max(len(l) * 10 for l in lines) + 16
-            bh = len(lines) * line_height + 12
-            bx, by = x1, max(y1 - bh - 4, 0)
+            # 信息卡背景
+            bw = 240
+            lh = 22
+            bh = len(lines) * lh + 10
+            bx, by = x1, max(0, y1 - bh - 6)
+            if by + bh > h: by = min(h - bh - 1, y2 + 6)
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (bx, by), (min(bx+bw, w-1), min(by+bh, h-1)), (0, 0, 0), -1)
+            frame = cv2.addWeighted(overlay, 0.55, frame, 0.45, 0)
 
-            # 背景
-            draw.rectangle([bx, by, bx + bw, by + bh], fill=(0, 0, 0, 180))
-            # 文字
-            ty = by + 6
+            ty = by + 18
             for line in lines:
-                draw.text((bx + 6, ty), line, font=font, fill=color)
-                ty += line_height
+                cv2.putText(frame, line, (bx+6, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+                ty += lh
 
-        return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    except Exception as e:
-        recognition_logger.exception('Draw detection error')
+        return frame
+    except Exception:
+        recognition_logger.exception('draw detections failed')
         return frame
 
 

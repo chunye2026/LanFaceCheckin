@@ -243,40 +243,38 @@ def camera_snapshot():
 
 @admin_bp.route('/api/admin/camera/stream', methods=['GET'])
 def camera_stream():
-    """MJPEG 视频流(后台管理用)"""
+    """后台管理视频流(带人脸框)"""
     from camera_service import get_stream_frame
-    import cv2
+    import cv2, numpy as np, time
 
     def generate():
         while True:
-            frame = get_stream_frame(annotated=False)
+            frame = get_stream_frame(annotated=True)
             if frame is None:
-                frame = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+                _, buf = cv2.imencode('.jpg', np.zeros((480, 640, 3), dtype=np.uint8))
             else:
                 _, buf = cv2.imencode('.jpg', frame)
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
-            import time; time.sleep(0.1)
+            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+            time.sleep(0.05)
 
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @admin_bp.route('/api/dashboard/stream', methods=['GET'])
 def dashboard_stream():
-    """大屏只读 MJPEG 流(带人脸框)"""
+    """大屏视频流(带人脸框)"""
     from camera_service import get_stream_frame
-    import cv2
+    import cv2, numpy as np, time
 
     def generate():
         while True:
             frame = get_stream_frame(annotated=True)
             if frame is None:
-                frame = cv2.imencode('.jpg', cv2.zeros((480, 640, 3), dtype=cv2.uint8))[0]
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+                _, buf = cv2.imencode('.jpg', np.zeros((480, 640, 3), dtype=np.uint8))
             else:
                 _, buf = cv2.imencode('.jpg', frame)
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
-            import time; time.sleep(0.1)
+            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+            time.sleep(0.05)
 
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
