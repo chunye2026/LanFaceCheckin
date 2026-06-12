@@ -55,7 +55,7 @@ def get_stream_frame(annotated=True):
             return _latest_annotated_frame.copy()
         if _latest_raw_frame is not None:
             return _latest_raw_frame.copy()
-    return get_frame()
+    return None
 
 def start():
     global _cap, _thread, _status
@@ -96,6 +96,7 @@ def get_frame():
 # ========== 主循环 ==========
 def _run_loop():
     global _frame_count, _status, _last_recognized
+    global _latest_raw_frame, _latest_annotated_frame
     from face_service import detect_faces, is_model_available
     frame_times = []
 
@@ -112,22 +113,24 @@ def _run_loop():
             if len(frame_times) >= 2:
                 _status['fps'] = round(len(frame_times) / (frame_times[-1] - frame_times[0]), 1)
 
-            # RGBA→BGR(部分摄像头返回RGBA)
+            # RGBA→BGR
             if len(frame.shape) == 3 and frame.shape[2] == 4:
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+
+            _status['last_frame_time'] = datetime.datetime.now()
+            _frame_count += 1
 
             # 保存原始帧
             with _frame_lock:
                 _latest_raw_frame = frame.copy()
 
-            _status['last_frame_time'] = datetime.datetime.now()
-            _frame_count += 1
+            should_detect = (_frame_count % DETECTION_EVERY_N_FRAMES == 0 and is_model_available())
 
-            detections = []
-            if _frame_count % DETECTION_EVERY_N_FRAMES == 0 and is_model_available():
+            if should_detect:
                 faces = detect_faces(frame)
                 _status['detected_faces'] = len(faces)
 
+                detections = []
                 if _flask_app:
                     with _flask_app.app_context():
                         for face in faces:
@@ -139,23 +142,18 @@ def _run_loop():
                             det = _do_recognition(emb, bbox, lp, lsc, lr)
                             detections.append(det)
 
-                if detections:
-                    _status['last_recognition_result'] = detections[-1]
-                    _status['current_detections'] = detections
-                elif not _status['current_detections']:
-                    # 没有检测到人脸时才清空
-                    _status['last_recognition_result'] = None
-                    _status['current_detections'] = []
+                _status['current_detections'] = detections
+                _status['last_recognition_result'] = detections[-1] if detections else None
 
-                # 绘制标注帧
-                if DASHBOARD_DRAW_FACE_BOX:
-                    annotated = _draw_detections(frame.copy(), _status['current_detections'])
-                    with _frame_lock:
-                        _latest_annotated_frame = annotated.copy()
+            # 每一帧都绘制当前 detections
+            current_dets = _status.get('current_detections', [])
+            if DASHBOARD_DRAW_FACE_BOX:
+                annotated = _draw_detections(frame.copy(), current_dets)
             else:
-                # 非检测帧：保持上次的识别结果，只更新原始帧
-                with _frame_lock:
-                    _latest_raw_frame = frame.copy()
+                annotated = frame.copy()
+
+            with _frame_lock:
+                _latest_annotated_frame = annotated.copy()
 
         except Exception as e:
             _status['last_error'] = str(e)
