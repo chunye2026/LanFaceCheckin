@@ -135,16 +135,25 @@ def _run_loop():
                             det = _do_recognition(emb, bbox, lp, lsc, lr)
                             detections.append(det)
 
-                _status['last_recognition_result'] = detections[-1] if detections else None
+                if detections:
+                    _status['last_recognition_result'] = detections[-1]
+                    _status['current_detections'] = detections
+                elif not _status['current_detections']:
+                    # 没有检测到人脸时才清空
+                    _status['last_recognition_result'] = None
+                    _status['current_detections'] = []
 
-            _status['current_detections'] = detections
-
-            # 绘制标注帧
-            annotated = frame.copy()
-            if DASHBOARD_DRAW_FACE_BOX and detections:
-                annotated = _draw_detections(annotated, detections)
-            with _frame_lock:
-                _latest_annotated_frame = annotated.copy()
+                # 绘制标注帧
+                if DASHBOARD_DRAW_FACE_BOX:
+                    annotated = _draw_detections(frame.copy(), _status['current_detections'])
+                    with _frame_lock:
+                        _latest_annotated_frame = annotated.copy()
+            else:
+                # 非检测帧：保持上次的识别结果和标注
+                if _frame_lock:
+                    with _frame_lock:
+                        if _latest_raw_frame is not None:
+                            _latest_raw_frame = frame.copy()
 
         except Exception as e:
             _status['last_error'] = str(e)
