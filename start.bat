@@ -1,60 +1,44 @@
-# 人脸识别局域网打卡系统
+@echo off
+chcp 65001 >nul
+setlocal
 
-## 技术栈
-- 后端: Python Flask + SQLite + face-recognition
-- 前端: Vue 3 + Element Plus + Vite
-- 人脸识别: face-recognition (基于dlib)
+cd /d "%~dp0"
 
-## 快速开始
+echo ============================================
+echo   网页版局域网打卡系统
+echo ============================================
+echo.
 
-### 1. 安装后端依赖
-```bash
-cd backend
-pip install -r requirements.txt
-```
+if not exist "backend\.env" (
+    echo [ERROR] 未找到 backend\.env
+    echo 请先复制 backend\.env.example 为 backend\.env，并设置 SECRET_KEY。
+    echo.
+    pause
+    exit /b 1
+)
 
-### 2. 安装前端依赖
-```bash
-cd frontend
-npm install
-```
+if not exist "frontend\dist\index.html" (
+    echo [ERROR] 未找到 frontend\dist\index.html
+    echo 请先执行:
+    echo   cd frontend
+    echo   npm install
+    echo   npm run build
+    echo.
+    pause
+    exit /b 1
+)
 
-### 3. 构建前端
-```bash
-cd frontend
-npm run build
-```
+if not exist "backend\models\insightface\models\buffalo_s\det_10g.onnx" (
+    echo [WARN] InsightFace 模型文件不存在，识别功能将不可用。
+    echo 可运行 download_model.bat 下载模型。
+    echo.
+)
 
-### 4. 启动后端服务
-```bash
-cd backend
-python app.py
-```
+echo 正在启动后端服务...
+echo 默认地址: http://127.0.0.1:5000
+echo.
 
-服务启动后访问: http://127.0.0.1:5000
-
-## 默认管理员
-- 用户名: admin
-- 密码: admin123
-
-## 开发模式
-前端开发（热更新，端口5173）:
-```bash
-cd frontend
-npm run dev
-```
-
-后端开发:
-```bash
 cd backend
 python app.py
-```
 
-开发模式下前端自动代理API到后端5000端口。
-
-## 使用流程
-1. 管理员登录后台 (http://127.0.0.1:5000/#/admin/login)
-2. 新增成员（填写姓名、工号等信息）
-3. 为成员上传人脸照片（录脸）
-4. 成员在打卡页面 (http://127.0.0.1:5000) 进行人脸签到/签退
-5. 在后台查看打卡记录和操作日志
+endlocal

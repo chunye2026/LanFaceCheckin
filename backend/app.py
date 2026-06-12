@@ -12,7 +12,7 @@ from config import (
     FLASK_DEBUG, FLASK_HOST, FLASK_PORT, FLASK_USE_SSL,
     ADMIN_INIT_USERNAME, ADMIN_INIT_PASSWORD, BASE_DIR
 )
-from security import init_security
+from security import admin_required, init_security
 from logger import app_logger
 
 import camera_service as camera_service_mod
@@ -49,10 +49,11 @@ def create_app():
         if today:
             q = q.filter(CheckinRecord.check_time >= f'{today} 00:00:00')
         records = q.order_by(CheckinRecord.check_time.desc()).limit(20).all()
-        return jsonify({'code': 200, 'data': [r.to_dict() for r in records]})
+        return jsonify({'code': 200, 'data': [_public_checkin_dict(r) for r in records]})
 
     # 上传文件访问
     @app.route('/uploads/<path:filename>')
+    @admin_required
     def uploaded_file(filename):
         return send_from_directory(UPLOAD_FOLDER, filename)
 
@@ -95,6 +96,16 @@ def _init_defaults():
         cam = CameraDevice(name='Default Camera', device_index=0)
         db.session.add(cam)
         db.session.commit()
+
+
+def _public_checkin_dict(record):
+    return {
+        'id': record.id,
+        'member_name': record.member_name,
+        'check_type': record.check_type,
+        'check_time': record.check_time.isoformat() if record.check_time else '',
+        'source': record.source,
+    }
 
 
 if __name__ == '__main__':

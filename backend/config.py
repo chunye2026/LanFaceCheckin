@@ -57,7 +57,7 @@ MAX_UPLOAD_SIZE_MB = 10
 # ====== 路径 ======
 if DATABASE_URL.startswith('sqlite:///'):
     _db_rel = DATABASE_URL.replace('sqlite:///', '')
-    _db_abs = os.path.join(BASE_DIR, _db_rel)
+    _db_abs = _db_rel if os.path.isabs(_db_rel) else os.path.join(BASE_DIR, _db_rel)
     DATABASE_URL = f'sqlite:///{_db_abs}'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, 'data'), exist_ok=True)

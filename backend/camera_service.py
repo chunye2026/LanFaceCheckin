@@ -6,7 +6,10 @@ import time
 import threading
 import datetime
 import numpy as np
-from config import CAMERA_INDEX, DETECTION_EVERY_N_FRAMES, ENABLE_LIVENESS, DASHBOARD_DRAW_FACE_BOX
+from config import (
+    CAMERA_INDEX, DETECTION_EVERY_N_FRAMES, ENABLE_LIVENESS,
+    DASHBOARD_DRAW_FACE_BOX, DASHBOARD_SHOW_PHONE, DASHBOARD_SHOW_EMAIL
+)
 from logger import recognition_logger, app_logger
 
 _status = {
@@ -219,8 +222,8 @@ def _do_recognition(embedding, bbox, liveness_passed, liveness_score, liveness_r
     if member:
         base['employee_id'] = member.employee_id
         base['department'] = member.department or ''
-        base['phone'] = mask_phone(member.phone)
-        base['email'] = mask_email(member.email)
+        base['phone'] = mask_phone(member.phone) if DASHBOARD_SHOW_PHONE else ''
+        base['email'] = mask_email(member.email) if DASHBOARD_SHOW_EMAIL else ''
 
     # 冷却检查
     mid = base['member_id']

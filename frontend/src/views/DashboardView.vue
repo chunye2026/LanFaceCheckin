@@ -1,152 +1,163 @@
 <template>
   <div class="monitor">
     <header class="monitor-header">
-      <div class="header-left">
-        <el-icon :size="24"><Camera /></el-icon>
-        <span class="header-title">无感考勤监控台</span>
-        <span class="header-time">{{ currentTime }}</span>
+      <div class="brand">
+        <div class="brand-icon"><el-icon><Camera /></el-icon></div>
+        <div>
+          <div class="header-title">无感考勤监控台</div>
+          <div class="header-subtitle">{{ camera.running ? '实时识别中' : '摄像头未启动' }} · {{ currentDate }}</div>
+        </div>
       </div>
-      <div class="header-right">
+      <div class="header-meta">
+        <div class="clock">{{ currentTime }}</div>
         <el-button text size="small" @click="$router.push('/admin/login')"><el-icon><User /></el-icon> 后台管理</el-button>
       </div>
     </header>
 
-    <!-- 状态栏 -->
-    <div class="stats-bar">
-      <div class="stat-item" :class="camera.running?'success':'info'">
-        <el-icon><VideoCamera /></el-icon><span class="stat-label">摄像头</span>
-        <span class="stat-val">{{ camera.running ? '运行' : '停止' }}</span>
+    <section class="stats-grid">
+      <div class="metric" :class="camera.running ? 'ok' : 'muted'">
+        <el-icon><VideoCamera /></el-icon>
+        <span>摄像头</span>
+        <strong>{{ camera.running ? '运行' : '停止' }}</strong>
       </div>
-      <div class="stat-item" :class="stats.model_available?'success':'danger'">
-        <el-icon><Cpu /></el-icon><span class="stat-label">推理</span>
-        <span class="stat-val">{{ stats.model_available ? 'ArcFace' : 'N/A' }}</span>
+      <div class="metric" :class="stats.model_available ? 'ok' : 'bad'">
+        <el-icon><Cpu /></el-icon>
+        <span>模型</span>
+        <strong>{{ stats.model_available ? 'ArcFace' : 'N/A' }}</strong>
       </div>
-      <div class="stat-item">
-        <el-icon><View /></el-icon><span class="stat-label">检测人脸</span>
-        <span class="stat-val">{{ camera.detected_faces || 0 }}</span>
+      <div class="metric">
+        <el-icon><View /></el-icon>
+        <span>人脸</span>
+        <strong>{{ camera.detected_faces || 0 }}</strong>
       </div>
-      <div class="stat-item success">
-        <span class="stat-label">今日签到</span>
-        <span class="stat-val">{{ stats.today_checkin }}</span>
+      <div class="metric ok">
+        <span>签到</span>
+        <strong>{{ stats.today_checkin || 0 }}</strong>
       </div>
-      <div class="stat-item warning">
-        <span class="stat-label">今日签退</span>
-        <span class="stat-val">{{ stats.today_checkout }}</span>
+      <div class="metric warn">
+        <span>签退</span>
+        <strong>{{ stats.today_checkout || 0 }}</strong>
       </div>
-      <div class="stat-item" :class="alerts.length?'danger':'success'">
-        <span class="stat-label">异常</span>
-        <span class="stat-val">{{ alerts.length }}</span>
+      <div class="metric" :class="alerts.length ? 'bad' : 'ok'">
+        <span>告警</span>
+        <strong>{{ alerts.length }}</strong>
       </div>
-      <div class="stat-item">
-        <span class="stat-label">FPS</span>
-        <span class="stat-val">{{ camera.fps || 0 }}</span>
+      <div class="metric">
+        <span>FPS</span>
+        <strong>{{ camera.fps || 0 }}</strong>
       </div>
-    </div>
+    </section>
 
-    <div class="monitor-body">
-      <div class="monitor-left">
-        <!-- 摄像头画面(带框) -->
+    <main class="monitor-body">
+      <section class="camera-zone">
         <div class="camera-panel">
-          <img v-if="camera.running" :src="streamUrl" class="camera-feed" />
-          <div v-else class="camera-offline"><el-icon :size="64" color="#606266"><VideoCamera /></el-icon><p>摄像头未启动</p></div>
-          <!-- 顶部识别状态条 -->
-          <div v-if="camera.running && detections.length" class="det-bar">
-            检测: {{ detections.length }}人脸 | {{ matchedCount }}已识别 | {{ checkedInCount }}已打卡 | FPS:{{ camera.fps }}
+          <img v-if="camera.running" :src="streamUrl" class="camera-feed" alt="Dashboard Stream" />
+          <div v-else class="camera-offline">
+            <el-icon :size="72"><VideoCamera /></el-icon>
+            <p>摄像头未启动</p>
+          </div>
+          <div class="camera-overlay">
+            <div class="live-pill" :class="{ active: camera.running }">
+              <span></span>{{ camera.running ? 'LIVE' : 'OFFLINE' }}
+            </div>
+            <div v-if="camera.running" class="det-bar">
+              <b>{{ detections.length }}</b> 人脸 · <b>{{ matchedCount }}</b> 已识别 · <b>{{ checkedInCount }}</b> 已打卡
+            </div>
           </div>
         </div>
 
-        <!-- 异常 -->
         <div v-if="alerts.length" class="alerts-area">
           <el-alert v-for="(a,i) in alerts" :key="i" :title="a.msg" :type="a.level==='error'?'error':'warning'" :closable="false" show-icon />
         </div>
 
-        <!-- 最近打卡 -->
-        <div class="events-panel">
-          <h4><el-icon><Clock /></el-icon> 最近有效打卡</h4>
-          <div class="record-list">
-            <div v-for="r in recentRecords" :key="r.id" class="record-row">
-              <span class="rec-name">{{ r.member_name }}</span>
-              <el-tag :type="r.check_type==='in'?'success':'warning'" size="small" effect="dark">{{ r.check_type==='in'?'签到':'签退' }}</el-tag>
-              <el-tag v-if="r.source==='manual_admin'" type="info" size="small">人工</el-tag>
-              <span class="rec-time">{{ formatTime(r.check_time) }}</span>
+        <div class="lower-grid">
+          <section class="panel attendance-panel">
+            <div class="panel-title"><el-icon><DataAnalysis /></el-icon> 综合考勤</div>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <div class="summary-head">
+                  <span>本周</span>
+                  <strong :class="rateClass(summary.week?.attendance_rate)">{{ summary.week?.attendance_rate || 0 }}%</strong>
+                </div>
+                <div class="bar"><i :style="{ width: `${summary.week?.attendance_rate || 0}%` }"></i></div>
+                <div class="summary-lines">
+                  <span>工作日 {{ summary.week?.work_days || 0 }} 天</span>
+                  <span>已出勤 {{ summary.week?.actual_person_days || 0 }} / {{ summary.week?.expected_person_days || 0 }}</span>
+                  <span>未考勤 {{ summary.week?.absent_person_days || 0 }}</span>
+                </div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-head">
+                  <span>本月</span>
+                  <strong :class="rateClass(summary.month?.attendance_rate)">{{ summary.month?.attendance_rate || 0 }}%</strong>
+                </div>
+                <div class="bar"><i :style="{ width: `${summary.month?.attendance_rate || 0}%` }"></i></div>
+                <div class="summary-lines">
+                  <span>工作日 {{ summary.month?.work_days || 0 }} 天</span>
+                  <span>已出勤 {{ summary.month?.actual_person_days || 0 }} / {{ summary.month?.expected_person_days || 0 }}</span>
+                  <span>未考勤 {{ summary.month?.absent_person_days || 0 }}</span>
+                </div>
+              </div>
             </div>
-            <el-empty v-if="!recentRecords.length" description="暂无打卡" :image-size="40" />
-          </div>
-        </div>
+          </section>
 
-        <!-- 综合考勤 -->
-        <div class="attendance-panel">
-          <h4><el-icon><DataAnalysis /></el-icon> 综合考勤统计</h4>
-          <el-row :gutter="12" class="summary-cards">
-            <el-col :span="12">
-              <div class="sum-card">
-                <div class="sum-title">本周</div>
-                <div class="sum-row">工作日 <b>{{ summary.week?.work_days || 0 }}</b> 天</div>
-                <div class="sum-row">应出勤 <b>{{ summary.week?.expected_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">已出勤 <b class="green">{{ summary.week?.actual_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">未考勤 <b class="red">{{ summary.week?.absent_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">出勤率 <b :class="(summary.week?.attendance_rate||0)>=80?'green':'red'">{{ summary.week?.attendance_rate || 0 }}%</b></div>
-              </div>
-            </el-col>
-            <el-col :span="12">
-              <div class="sum-card">
-                <div class="sum-title">本月</div>
-                <div class="sum-row">工作日 <b>{{ summary.month?.work_days || 0 }}</b> 天</div>
-                <div class="sum-row">应出勤 <b>{{ summary.month?.expected_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">已出勤 <b class="green">{{ summary.month?.actual_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">未考勤 <b class="red">{{ summary.month?.absent_person_days || 0 }}</b> 人次</div>
-                <div class="sum-row">出勤率 <b :class="(summary.month?.attendance_rate||0)>=80?'green':'red'">{{ summary.month?.attendance_rate || 0 }}%</b></div>
-              </div>
-            </el-col>
-          </el-row>
-
-          <!-- 排名 -->
-          <el-row :gutter="12" style="margin-top:12px">
-            <el-col :span="12">
-              <div class="rank-box">
-                <div class="rank-title">本周缺勤排行</div>
-                <div v-for="(r,i) in (summary.week?.ranking || [])" :key="r.member_id" class="rank-row" :class="i<3?'rank-top':''">
-                  <span class="rk-num">#{{ i+1 }}</span>
-                  <span class="rk-name">{{ r.name }}</span>
-                  <span class="rk-dept">{{ r.department }}</span>
-                  <span class="rk-abs">缺{{ r.absent_days }}天</span>
+          <section class="panel records-panel">
+            <div class="panel-title"><el-icon><Clock /></el-icon> 最近有效打卡</div>
+            <div class="record-list">
+              <div v-for="r in recentRecords.slice(0, 6)" :key="r.id" class="record-row">
+                <div class="avatar">{{ nameInitial(r.member_name) }}</div>
+                <div class="rec-main">
+                  <strong>{{ r.member_name }}</strong>
+                  <span>{{ formatTime(r.check_time) }}</span>
                 </div>
-                <el-empty v-if="!(summary.week?.ranking||[]).length" description="暂无数据" :image-size="30" />
+                <el-tag :type="r.check_type==='in'?'success':'warning'" size="small" effect="dark">{{ r.check_type==='in'?'签到':'签退' }}</el-tag>
               </div>
-            </el-col>
-            <el-col :span="12">
-              <div class="rank-box">
-                <div class="rank-title">本月缺勤排行</div>
-                <div v-for="(r,i) in (summary.month?.ranking || [])" :key="r.member_id" class="rank-row" :class="i<3?'rank-top':''">
-                  <span class="rk-num">#{{ i+1 }}</span>
-                  <span class="rk-name">{{ r.name }}</span>
-                  <span class="rk-dept">{{ r.department }}</span>
-                  <span class="rk-abs">缺{{ r.absent_days }}天</span>
-                </div>
-                <el-empty v-if="!(summary.month?.ranking||[]).length" description="暂无数据" :image-size="30" />
-              </div>
-            </el-col>
-          </el-row>
+              <el-empty v-if="!recentRecords.length" description="暂无打卡" :image-size="40" />
+            </div>
+          </section>
         </div>
-      </div>
+      </section>
 
-      <div class="monitor-right">
-        <div class="records-panel">
-          <h4><el-icon><View /></el-icon> 识别事件</h4>
+      <aside class="side-zone">
+        <section class="panel event-panel">
+          <div class="panel-title"><el-icon><View /></el-icon> 识别事件</div>
           <div class="event-list">
-            <div v-for="e in aggregatedEvents" :key="e.member_id||Math.random()" class="event-row" :class="e.checkin_created?'event-ok':'event-warn'">
-              <span class="evt-name">{{ e.member_name||'陌生人' }}</span>
-              <el-tag size="small" effect="dark" :type="e.matched?'success':'danger'">{{ (e.max_confidence*100||e.confidence*100||0).toFixed(1) }}%</el-tag>
-              <span v-if="e.count>1" class="evt-count">×{{ e.count }}</span>
-              <el-tag v-if="e.checkin_created" size="small" type="success" effect="dark">已打卡</el-tag>
-              <span v-else-if="e.failure_reason" class="evt-reason">{{ reasonLabel(e.failure_reason) }}</span>
-              <span class="evt-time">{{ formatTime(e.last_time||e.created_at) }}</span>
+            <div v-for="e in aggregatedEvents" :key="eventKey(e)" class="event-row" :class="eventClass(e)">
+              <div class="event-top">
+                <strong>{{ e.member_name || '陌生人' }}</strong>
+                <span>{{ formatTime(e.last_time || e.created_at) }}</span>
+              </div>
+              <div class="event-bottom">
+                <el-tag size="small" effect="dark" :type="e.matched ? 'success' : 'danger'">{{ confidenceText(e) }}</el-tag>
+                <el-tag v-if="e.checkin_created" size="small" type="success" effect="dark">已打卡</el-tag>
+                <span v-else-if="e.failure_reason" class="evt-reason">{{ reasonLabel(e.failure_reason) }}</span>
+                <span v-if="e.count > 1" class="evt-count">x{{ e.count }}</span>
+              </div>
             </div>
-            <el-empty v-if="!aggregatedEvents.length" description="暂无" :image-size="40" />
+            <el-empty v-if="!aggregatedEvents.length" description="暂无识别" :image-size="46" />
           </div>
-        </div>
-      </div>
-    </div>
+        </section>
+
+        <section class="panel rank-panel">
+          <div class="panel-title">缺勤排行</div>
+          <div class="rank-tabs">
+            <button :class="{ active: rankPeriod === 'week' }" @click="rankPeriod = 'week'">本周</button>
+            <button :class="{ active: rankPeriod === 'month' }" @click="rankPeriod = 'month'">本月</button>
+          </div>
+          <div class="rank-list">
+            <div v-for="(r,i) in activeRanking" :key="r.member_id" class="rank-row">
+              <span class="rk-num">{{ i + 1 }}</span>
+              <div class="rk-main">
+                <strong>{{ r.name }}</strong>
+                <span>{{ r.department || '未分组' }}</span>
+              </div>
+              <b>缺 {{ r.absent_days }} 天</b>
+            </div>
+            <el-empty v-if="!activeRanking.length" description="暂无数据" :image-size="40" />
+          </div>
+        </section>
+      </aside>
+    </main>
   </div>
 </template>
 
@@ -162,14 +173,46 @@ const aggregatedEvents = ref([])
 const recentRecords = ref([])
 const summary = ref({ week: {}, month: {} })
 const currentTime = ref('')
+const currentDate = ref('')
 const streamUrl = '/api/dashboard/stream'
 const detections = ref([])
+const rankPeriod = ref('week')
 let timers = []
 
 const matchedCount = computed(() => detections.value.filter(d => d.matched).length)
 const checkedInCount = computed(() => detections.value.filter(d => d.checkin_created).length)
+const activeRanking = computed(() => summary.value[rankPeriod.value]?.ranking || [])
 
-function updateClock() { currentTime.value = new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
+function updateClock() {
+  const now = new Date()
+  currentTime.value = now.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  currentDate.value = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' })
+}
+
+function rateClass(rate = 0) {
+  if (rate >= 90) return 'green'
+  if (rate >= 75) return 'amber'
+  return 'red'
+}
+
+function nameInitial(name = '') {
+  return String(name || '?').slice(0, 1)
+}
+
+function confidenceText(e) {
+  const value = (e.max_confidence || e.confidence || 0) * 100
+  return `${value.toFixed(1)}%`
+}
+
+function eventClass(e) {
+  if (!e.matched) return 'event-bad'
+  if (e.checkin_created) return 'event-ok'
+  return 'event-warn'
+}
+
+function eventKey(e) {
+  return `${e.member_id || 'unknown'}-${e.last_time || e.created_at || ''}-${e.failure_reason || ''}`
+}
 
 async function refresh() {
   try {
@@ -188,72 +231,106 @@ async function refresh() {
   } catch {}
 }
 
-onMounted(() => { updateClock(); refresh(); timers.push(setInterval(refresh, 3000), setInterval(updateClock, 1000)) })
+onMounted(() => {
+  updateClock()
+  refresh()
+  timers.push(setInterval(refresh, 3000), setInterval(updateClock, 1000))
+})
 onUnmounted(() => timers.forEach(clearInterval))
 </script>
 
 <style scoped>
-.monitor { display: flex; flex-direction: column; height: 100vh; background: #1a1a2e; color: #e0e0e0; overflow: hidden; }
-.monitor-header { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; height: 48px; background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.header-title { font-size: 18px; font-weight: 600; }
-.header-time { font-family: monospace; font-size: 14px; color: #909399; }
-.header-right { display: flex; align-items: center; }
+.monitor { min-height: 100vh; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #eef6f8; background: radial-gradient(circle at 18% 0%, rgba(25, 90, 108, 0.28), transparent 30%), linear-gradient(135deg, #101820 0%, #16202a 52%, #0e1419 100%); }
+.monitor-header { height: 68px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(8, 14, 18, 0.55); }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 8px; background: #1f8a70; color: #ffffff; font-size: 22px; box-shadow: 0 0 24px rgba(31, 138, 112, 0.35); }
+.header-title { font-size: 22px; font-weight: 800; letter-spacing: 0; }
+.header-subtitle { margin-top: 4px; color: #9db4bd; font-size: 12px; }
+.header-meta { display: flex; align-items: center; gap: 16px; }
+.clock { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 28px; font-weight: 800; color: #f8d66d; }
 
-.stats-bar { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
-.stat-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 4px; border-right: 1px solid rgba(255,255,255,0.04); gap: 2px; }
-.stat-item:last-child { border-right: none; }
-.stat-item.success { color: #67c23a; }
-.stat-item.warning { color: #e6a23c; }
-.stat-item.danger { color: #f56c6c; background: rgba(245,108,108,0.08); }
-.stat-item.info { color: #909399; }
-.stat-item .stat-label { font-size: 10px; letter-spacing: 0.5px; }
-.stat-item .stat-val { font-size: 16px; font-weight: 700; }
-.stat-item .el-icon { font-size: 16px; }
+.stats-grid { flex-shrink: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.metric { min-width: 0; height: 76px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.055); }
+.metric .el-icon { font-size: 18px; color: #89c2d9; }
+.metric span { color: #9db4bd; font-size: 12px; }
+.metric strong { color: #ffffff; font-size: 24px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metric.ok strong, .green { color: #64d58a; }
+.metric.warn strong, .amber { color: #f8d66d; }
+.metric.bad strong, .red { color: #ff6b6b; }
+.metric.muted strong { color: #97a4aa; }
 
-.monitor-body { display: flex; flex: 1; overflow: hidden; }
-.monitor-left { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 10px; gap: 10px; min-width: 0; }
-.monitor-right { width: 280px; flex-shrink: 0; overflow-y: auto; padding: 10px; border-left: 1px solid rgba(255,255,255,0.06); }
+.monitor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; padding: 0 16px 16px; overflow: hidden; }
+.camera-zone { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.side-zone { min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
 
-.camera-panel { position: relative; background: #000; border-radius: 8px; overflow: hidden; max-height: 40vh; min-height: 200px; }
-.camera-feed { width: 100%; height: 100%; object-fit: contain; }
-.camera-offline { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 12px; color: #909399; }
-.det-bar { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); color: #67c23a; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+.camera-panel { position: relative; flex: 1; min-height: 280px; background: #030608; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; box-shadow: 0 18px 48px rgba(0,0,0,0.24); }
+.camera-feed { width: 100%; height: 100%; display: block; object-fit: contain; }
+.camera-offline { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #6f8088; }
+.camera-offline p { margin: 0; font-size: 18px; }
+.camera-overlay { position: absolute; inset: 14px 14px auto 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; pointer-events: none; }
+.live-pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 6px; color: #c7d2d7; background: rgba(0,0,0,0.55); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; font-weight: 800; }
+.live-pill span { width: 8px; height: 8px; border-radius: 50%; background: #7f8b90; }
+.live-pill.active span { background: #64d58a; box-shadow: 0 0 14px #64d58a; }
+.det-bar { max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(0,0,0,0.58); color: #d7edf2; padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+.det-bar b { color: #f8d66d; }
 
-.alerts-area { display: flex; flex-direction: column; gap: 3px; }
+.alerts-area { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.lower-grid { flex-shrink: 0; display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; min-height: 210px; }
+.panel { min-width: 0; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.055); padding: 14px; overflow: hidden; }
+.panel-title { height: 24px; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #e8f3f6; font-size: 15px; font-weight: 800; }
 
-.events-panel, .records-panel, .attendance-panel { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; }
-.events-panel h4, .records-panel h4, .attendance-panel h4 { margin: 0 0 8px 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.summary-card { border-radius: 8px; background: rgba(0,0,0,0.18); padding: 14px; }
+.summary-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.summary-head span { color: #9db4bd; font-size: 13px; }
+.summary-head strong { font-size: 28px; line-height: 1; }
+.bar { height: 8px; margin: 12px 0; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.bar i { display: block; height: 100%; max-width: 100%; border-radius: inherit; background: linear-gradient(90deg, #1f8a70, #f8d66d); }
+.summary-lines { display: grid; gap: 5px; color: #b8c8ce; font-size: 12px; }
 
-.record-list { display: flex; flex-direction: column; gap: 4px; }
-.record-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,0.03); font-size: 12px; }
-.rec-name { font-weight: 600; min-width: 40px; }
-.rec-time { margin-left: auto; color: #909399; font-family: monospace; }
+.record-list, .event-list, .rank-list { display: flex; flex-direction: column; gap: 8px; }
+.record-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 7px 8px; border-radius: 7px; background: rgba(0,0,0,0.18); }
+.avatar { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 7px; background: #2d6a8a; color: #ffffff; font-weight: 800; }
+.rec-main { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.rec-main strong, .event-top strong, .rk-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-main span, .event-top span, .rk-main span { color: #9db4bd; font-size: 12px; }
 
-.event-list { display: flex; flex-direction: column; gap: 3px; }
-.event-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; font-size: 11px; }
-.event-ok { background: rgba(103,194,58,0.08); }
-.event-warn { background: rgba(230,162,60,0.06); }
-.evt-name { font-weight: 600; min-width: 50px; }
-.evt-count { color: #909399; font-size: 10px; }
-.evt-reason { color: #e6a23c; font-size: 10px; }
-.evt-time { margin-left: auto; color: #909399; font-family: monospace; }
+.event-panel { flex: 1.1; min-height: 0; }
+.event-list { max-height: calc(100% - 36px); overflow-y: auto; padding-right: 2px; }
+.event-row { padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.18); border-left: 4px solid #f8d66d; }
+.event-row.event-ok { border-left-color: #64d58a; }
+.event-row.event-bad { border-left-color: #ff6b6b; }
+.event-top, .event-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.event-bottom { margin-top: 8px; justify-content: flex-start; flex-wrap: wrap; }
+.evt-reason { color: #f8d66d; font-size: 12px; }
+.evt-count { margin-left: auto; color: #9db4bd; font-size: 12px; }
 
-/* Attendance */
-.summary-cards { margin-bottom: 8px; }
-.sum-card { background: rgba(255,255,255,0.03); border-radius: 6px; padding: 10px 14px; }
-.sum-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #409eff; }
-.sum-row { font-size: 12px; line-height: 1.8; color: #c0c4cc; }
-.sum-row b { color: #e0e0e0; }
-.green { color: #67c23a; }
-.red { color: #f56c6c; }
+.rank-panel { flex: 0.9; min-height: 0; }
+.rank-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.rank-tabs button { height: 30px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #b8c8ce; background: rgba(0,0,0,0.14); cursor: pointer; }
+.rank-tabs button.active { color: #ffffff; background: #2d6a8a; border-color: #2d6a8a; }
+.rank-list { max-height: calc(100% - 76px); overflow-y: auto; }
+.rank-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px; border-radius: 7px; background: rgba(0,0,0,0.16); }
+.rk-num { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; background: rgba(255,255,255,0.1); color: #f8d66d; font-weight: 800; }
+.rk-main { min-width: 0; display: grid; gap: 2px; }
+.rank-row b { color: #ffb86b; font-size: 12px; white-space: nowrap; }
 
-.rank-box { background: rgba(255,255,255,0.02); border-radius: 6px; padding: 8px; }
-.rank-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #909399; }
-.rank-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-.rank-row.rank-top { background: rgba(245,108,108,0.06); }
-.rk-num { font-weight: 700; min-width: 24px; color: #f56c6c; }
-.rk-name { font-weight: 600; min-width: 40px; }
-.rk-dept { color: #909399; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rk-abs { font-weight: 600; color: #e6a23c; }
+:deep(.el-button.is-text) { color: #d7edf2; }
+:deep(.el-empty__description p) { color: #9db4bd; }
+
+@media (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .monitor-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .side-zone { min-height: 520px; }
+}
+
+@media (max-width: 720px) {
+  .monitor { height: auto; min-height: 100vh; overflow: auto; }
+  .monitor-header { height: auto; padding: 12px; align-items: flex-start; gap: 12px; }
+  .header-meta { align-items: flex-end; flex-direction: column; gap: 6px; }
+  .clock { font-size: 22px; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
+  .monitor-body { padding: 0 10px 10px; }
+  .lower-grid, .summary-grid { grid-template-columns: 1fr; }
+}
 </style>

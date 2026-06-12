@@ -15,11 +15,22 @@ from config import MIN_FACE_SAMPLES, MAX_FACE_SAMPLES, FACE_MATCH_THRESHOLD
 admin_bp = Blueprint('admin', __name__)
 
 
+def _json_body():
+    return request.get_json(silent=True) or {}
+
+
+def _pagination(default_per_page=50, max_per_page=200):
+    page = max(request.args.get('page', 1, type=int) or 1, 1)
+    per_page = request.args.get('per_page', default_per_page, type=int) or default_per_page
+    per_page = min(max(per_page, 1), max_per_page)
+    return page, per_page
+
+
 # ========== 认证 ==========
 
 @admin_bp.route('/api/admin/login', methods=['POST'])
 def login():
-    data = request.get_json()
+    data = _json_body()
     username = data.get('username', '').strip()
     password = data.get('password', '')
     if not username or not password:
@@ -40,7 +51,7 @@ def login():
 @admin_bp.route('/api/admin/change-password', methods=['POST'])
 @admin_required
 def change_password():
-    data = request.get_json()
+    data = _json_body()
     old_pw = data.get('old_password', '')
     new_pw = data.get('new_password', '')
     if not new_pw or len(new_pw) < 6:
@@ -50,8 +61,8 @@ def change_password():
         return jsonify({'code': 400, 'message': '旧密码错误'})
     admin.set_password(new_pw)
     admin.must_change_password = False
-    db.session.commit()
     write_operation_log('CHANGE_PASSWORD', target_name=admin.username)
+    db.session.commit()
     security_logger.info(f'Password changed: {admin.username}')
     return jsonify({'code': 200, 'message': '密码修改成功'})
 
@@ -79,7 +90,7 @@ def list_members():
 @admin_bp.route('/api/admin/members', methods=['POST'])
 @admin_required
 def create_member():
-    data = request.get_json()
+    data = _json_body()
     name = data.get('name', '').strip()
     eid = data.get('employee_id', '').strip()
     if not name: return jsonify({'code': 400, 'message': '姓名不能为空'})
@@ -99,7 +110,7 @@ def create_member():
 def update_member(mid):
     m = Member.query.get(mid)
     if not m: return jsonify({'code': 404, 'message': '成员不存在'})
-    data = request.get_json()
+    data = _json_body()
     if 'name' in data and data['name'].strip(): m.name = data['name'].strip()
     if 'department' in data: m.department = data['department'].strip()
     if 'phone' in data: m.phone = data['phone'].strip()
@@ -223,6 +234,7 @@ def camera_stop():
 
 
 @admin_bp.route('/api/admin/camera/status', methods=['GET'])
+@admin_required
 def camera_status():
     from camera_service import get_status
     s = get_status()
@@ -231,6 +243,7 @@ def camera_status():
 
 
 @admin_bp.route('/api/admin/camera/snapshot', methods=['GET'])
+@admin_required
 def camera_snapshot():
     from camera_service import get_frame
     import cv2
@@ -242,6 +255,7 @@ def camera_snapshot():
 
 
 @admin_bp.route('/api/admin/camera/stream', methods=['GET'])
+@admin_required
 def camera_stream():
     """后台管理视频流(带人脸框)"""
     from camera_service import get_stream_frame
@@ -284,8 +298,7 @@ def dashboard_stream():
 @admin_bp.route('/api/admin/recognition-events', methods=['GET'])
 @admin_required
 def list_recognition_events():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    page, per_page = _pagination(default_per_page=20, max_per_page=200)
     q = RecognitionEvent.query.order_by(RecognitionEvent.created_at.desc())
     total = q.count()
     events = q.offset((page-1)*per_page).limit(per_page).all()
@@ -302,8 +315,7 @@ def list_checkin_records():
     source = request.args.get('source')
     df = request.args.get('date_from')
     dt_ = request.args.get('date_to')
-    page = request.args.get('page', 1, type=int)
-    pp = request.args.get('per_page', 50, type=int)
+    page, pp = _pagination(default_per_page=50, max_per_page=500)
     fmt = request.args.get('format', 'json')
 
     q = CheckinRecord.query
@@ -329,7 +341,7 @@ def list_checkin_records():
 @admin_bp.route('/api/admin/checkin-records/manual', methods=['POST'])
 @admin_required
 def manual_checkin():
-    data = request.get_json()
+    data = _json_body()
     mid = data.get('member_id')
     ctype = data.get('check_type')
     if not mid or ctype not in ('in', 'out'):
@@ -381,27 +393,53 @@ def dashboard_status():
         },
         'alerts': alerts,
         'aggregated_events': aggregated[:8],
-        'recent_records': [r.to_dict() for r in records],
+        'recent_records': [_public_checkin_dict(r) for r in records],
         'last_recognition': last_result,
     }})
 
 
+def _public_checkin_dict(record):
+    return {
+        'id': record.id,
+        'member_name': record.member_name,
+        'check_type': record.check_type,
+        'check_time': record.check_time.isoformat() if record.check_time else '',
+        'source': record.source,
+    }
+
+
 def _aggregate_events(events, window_seconds=10):
     """合并同一成员+同一原因在时间窗口内的重复识别"""
-    from collections import defaultdict
-    groups = defaultdict(list)
-    for e in events:
-        mid = e.member_id or 0
-        reason = e.failure_reason or ''
-        key = (mid, reason)
-        groups[key].append(e)
+    from datetime import datetime, timedelta
+
+    window = timedelta(seconds=window_seconds)
+    sorted_events = sorted(
+        events,
+        key=lambda x: x.created_at or datetime.min,
+        reverse=True
+    )
+    groups = []
+
+    for event in sorted_events:
+        event_time = event.created_at or datetime.min
+        key = (event.member_id or 0, event.failure_reason or '')
+        target = None
+        for group in groups:
+            if group['key'] == key and group['latest_time'] - event_time <= window:
+                target = group
+                break
+        if target is None:
+            target = {'key': key, 'latest_time': event_time, 'events': []}
+            groups.append(target)
+        target['events'].append(event)
 
     result = []
-    for (mid, reason), evts in groups.items():
+    for group in groups:
+        mid, reason = group['key']
+        evts = group['events']
         if len(evts) == 1:
             result.append(evts[0].to_dict())
             continue
-        evts.sort(key=lambda x: x.created_at, reverse=True)
         merged = {
             'member_id': mid,
             'member_name': evts[0].member_name,
@@ -453,8 +491,7 @@ def dashboard_attendance_summary():
 @admin_bp.route('/api/admin/operation-logs', methods=['GET'])
 @admin_required
 def list_operation_logs():
-    page = request.args.get('page', 1, type=int)
-    pp = request.args.get('per_page', 50, type=int)
+    page, pp = _pagination(default_per_page=50, max_per_page=200)
     aname = request.args.get('admin_name', '').strip()
     action = request.args.get('action', '').strip()
     q = OperationLog.query
@@ -465,6 +502,7 @@ def list_operation_logs():
     return jsonify({'code': 200, 'data': {'list': [l.to_dict() for l in logs], 'total': total, 'page': page, 'per_page': pp}})
 
 @admin_bp.route('/api/admin/system/status', methods=['GET'])
+@admin_required
 def system_status():
     member_count = Member.query.filter_by(active=True).count()
     today = datetime.now().strftime('%Y-%m-%d')

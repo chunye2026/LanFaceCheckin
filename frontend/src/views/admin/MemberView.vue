@@ -95,7 +95,7 @@
           type="warning" show-icon :closable="false" style="margin-bottom:12px" />
         <div class="samples-grid">
           <div v-for="s in existingSamples" :key="s.id" class="sample-item">
-            <img :src="'/uploads/' + s.image_path" class="sample-thumb" />
+            <img :src="sampleImageUrl(s.image_path)" class="sample-thumb" />
             <el-button text type="danger" size="small" class="sample-del"
               @click="deleteSample(s.id)"><el-icon><Delete /></el-icon></el-button>
           </div>
@@ -280,6 +280,11 @@ async function deleteSample(sid) {
     await loadSamples()
     fetchMembers()
   } catch {}
+}
+
+function sampleImageUrl(imagePath) {
+  const token = localStorage.getItem('admin_token') || ''
+  return `/uploads/${encodeURIComponent(imagePath)}?token=${encodeURIComponent(token)}`
 }
 
 onMounted(fetchMembers)

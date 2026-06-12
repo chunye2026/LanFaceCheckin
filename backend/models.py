@@ -20,7 +20,7 @@ def write_operation_log(action, target_type='', target_id=0, target_name='', det
             ip_address=request.remote_addr or ''
         )
         db.session.add(log)
-        db.session.commit()
+        db.session.flush()
     except Exception:
         import logging
         logging.getLogger('app').exception('write_operation_log failed')

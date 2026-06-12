@@ -47,14 +47,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { cameraStart, cameraStop, cameraStatus } from '../api/index.js'
 
 const status = ref({ running: false, fps: 0, detected_faces: 0, model_available: false, last_frame_time: '', last_error: '' })
 const starting = ref(false)
 const stopping = ref(false)
-const streamUrl = '/api/admin/camera/stream'
+const streamUrl = computed(() => {
+  const token = localStorage.getItem('admin_token') || ''
+  return `/api/admin/camera/stream?token=${encodeURIComponent(token)}`
+})
 let timer = null
 
 async function refresh() {

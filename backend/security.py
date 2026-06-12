@@ -42,6 +42,9 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        query_token_views = ('camera_snapshot', 'camera_stream', 'uploaded_file')
+        if not token and request.method == 'GET' and f.__name__ in query_token_views:
+            token = request.args.get('token', '').strip()
         if not token:
             return jsonify({'code': 401, 'message': '未登录'}), 401
         try:
